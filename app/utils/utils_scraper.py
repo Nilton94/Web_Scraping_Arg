@@ -172,6 +172,12 @@ class ScraperArgenProp:
 
                 res = soup.find('div', {"class":"listing__items"})
 
+                # ESTADO
+                try:
+                    estado = get_state(cidade = x['local'])
+                except:
+                    estado = 'Sem info'
+
                 for i in res:
                     # CIDADE
                     try:
@@ -227,12 +233,6 @@ class ScraperArgenProp:
                         bairro = re.match(r'^([^,]+)', (i.find('p','card__title--primary show-mobile').text).strip()).group(0)
                     except:
                         bairro = 'Sem info'
-
-                    # ESTADO
-                    try:
-                        estado = get_state(cidade = cidade)
-                    except:
-                        estado = ''
 
                     # ALUGUEL - MOEDA
                     try:

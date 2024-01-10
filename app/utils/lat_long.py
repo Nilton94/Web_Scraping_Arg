@@ -10,38 +10,55 @@ from concurrent.futures import ProcessPoolExecutor
 # Criando logger
 logger = get_logger()
 
-def get_state(cidade: str = '', pais: str = 'argentina'):
+# Lista com as províncias e municípios, incluindo departamentos
+def get_state(cidade: str = ''):
     try:
         
-        logger.info('Tratando nome da cidade!')
+        logger.info('Agrupando dados de província e departamentos!')
         
-        # Tratando strings
-        cidade = unidecode.unidecode(cidade).lower()
+        # # Tratando strings
+        # cidade = unidecode.unidecode(cidade).lower()
 
-        # Bases
+        # # Bases
+        # df_dpt = pd.read_parquet(
+        #     os.path.join(os.getcwd(),'data','geograficos','departamentos') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','departamentos')
+        # )
+
+        # df_prov_muni = pd.read_parquet(
+        #     os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
+        # )
+
+        # logger.info(f'Procurando estado para a cidade {cidade} - {pais}!')
+
+        # # Procurando a cidade nas bases e retornando o estado/provincia
+        # base_muni = df_prov_muni[df_prov_muni['municipio'] == cidade][['municipio','provincia']]
+        # base_dpt = df_dpt.loc[df_dpt['departamento'] == cidade][['departamento','provincia']]
+
+        # if base_muni.shape[0] > 0: 
+        #     estado = base_muni['provincia'].iloc[0]
+        # elif base_dpt.shape[0] > 0: 
+        #     estado = base_dpt['provincia'].iloc[0]
+        # else: 
+        #     estado = ''
+        # JSON COM DADOS DE MUNICIPIO/DEPARTAMENTO E PROVINCIA
+
+        df_mun = pd.read_parquet(
+            os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
+        )
+        df_mun_final = df_mun[['municipio_tratado','provincia_tratada']].drop_duplicates()
+
         df_dpt = pd.read_parquet(
             os.path.join(os.getcwd(),'data','geograficos','departamentos') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','departamentos')
         )
+        df_dpt_final = df_dpt[['departamento', 'provincia']].drop_duplicates()
 
-        df_prov_muni = pd.read_parquet(
-            os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
-        )
+        json_mun = {row['municipio_tratado']:row['provincia_tratada'] for index, row in df_mun_final.iterrows()}
+        json_dpt = {row['departamento']:row['provincia'] for index, row in df_dpt_final.iterrows()}
 
-        logger.info(f'Procurando estado para a cidade {cidade} - {pais}!')
-
-        # Procurando a cidade nas bases e retornando o estado/provincia
-        base_muni = df_prov_muni[df_prov_muni['municipio'] == cidade][['municipio','provincia']]
-        base_dpt = df_dpt.loc[df_dpt['departamento'] == cidade][['departamento','provincia']]
-
-        if base_muni.shape[0] > 0: 
-            estado = base_muni['provincia'].iloc[0]
-        elif base_dpt.shape[0] > 0: 
-            estado = base_dpt['provincia'].iloc[0]
-        else: 
-            estado = ''
+        estado = {**json_dpt, **json_mun}
 
         # Retornando Estado
-        return estado
+        return estado[cidade]
     
     except Exception as e:
         # logger.error(f'Erro na obtenção dos dados: {e}')
@@ -108,6 +125,7 @@ def apply_geocoding(row):
     result = get_geocoding(
         endereco = row['endereco'],
         bairro = row['bairro'],
-        cidade = row['cidade']
+        cidade = row['cidade'],
+        estado = row['estado']
     )
     return pd.Series({'latitude': result.get('lat'), 'longitude': result.get('lon')})
