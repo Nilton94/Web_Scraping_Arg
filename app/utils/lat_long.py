@@ -40,8 +40,8 @@ def get_state(cidade: str = ''):
         #     estado = base_dpt['provincia'].iloc[0]
         # else: 
         #     estado = ''
+        
         # JSON COM DADOS DE MUNICIPIO/DEPARTAMENTO E PROVINCIA
-
         df_mun = pd.read_parquet(
             os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
         )
@@ -83,49 +83,43 @@ def get_geocoding(endereco: str = '', bairro: str = '', cidade: str = '', estado
         # Tratando strings
         cidade = unidecode.unidecode(cidade).lower()
 
-        # Bases
-        df_dpt = pd.read_parquet(
-            os.path.join(os.getcwd(),'data','geograficos','departamentos') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','departamentos')
-        )
-
-        df_prov_muni = pd.read_parquet(
-            os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
-        )
-
-        logger.info(f'Procurando estado para a cidade {cidade} - {pais}!')
-
-        # Procurando a cidade nas bases e retornando o estado/provincia
-        base_muni = df_prov_muni[df_prov_muni['municipio'] == cidade][['municipio','provincia']]
-        base_dpt = df_dpt.loc[df_dpt['departamento'] == cidade][['departamento','provincia']]
-
-        if base_muni.shape[0] > 0: 
-            estado = base_muni['provincia'].iloc[0]
-        elif base_dpt.shape[0] > 0: 
-            estado = base_dpt['provincia'].iloc[0]
-        else: 
-            estado = ''
-
         # Retornando latitude e longitude
         geo_string = f'{endereco},{bairro},{cidade},{estado},{pais}'.replace(',,',',')
-        # geolocator = Nominatim(user_agent = f"{user_agent}")
-        response = geocoder.arcgis(geo_string)
 
         logger.info(f'Tentando obter coordenadas do local {geo_string}!')
+        # geolocator = Nominatim(user_agent = f"{user_agent}")
+        response = geocoder.arcgis(geo_string)
 
         # location = geolocator.geocode(geo_string)
         # return location.raw
         return response.json
     
     except Exception as e:
-        # logger.error(f'Erro na obtenção dos dados: {e}')
         return {'lat': None, 'lon': None}
     
 # Função para aplicar a get_geocoding em um Dataframe
 def apply_geocoding(row):
+    '''
+        ### Objetivo:
+        - Aplica a função a um dataframe e retorna a latitude e longitude com base no endereço 
+    '''
     result = get_geocoding(
         endereco = row['endereco'],
         bairro = row['bairro'],
         cidade = row['cidade'],
         estado = row['estado']
     )
-    return pd.Series({'latitude': result.get('lat'), 'longitude': result.get('lon')})
+
+    try:
+        resultado = {
+                'id': row['id'],
+                'latitude': result.get('lat'), 
+                'longitude': result.get('lng')
+        }
+    except:
+        resultado = {
+                'id': row['id'],
+                'latitude': None, 
+                'longitude': None
+        }
+    return resultado
