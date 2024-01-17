@@ -3,6 +3,7 @@ from pandas import json_normalize
 import requests
 from bs4 import BeautifulSoup
 from random_user_agent.user_agent import UserAgent
+import concurrent.futures
 import pyarrow as pa
 import pyarrow.parquet as pq
 import re
@@ -13,7 +14,7 @@ from dataclasses import dataclass
 import datetime
 import pytz
 from utils.log_config import get_logger
-from utils.lat_long import get_geocoding, get_state
+from utils.lat_long import get_geocoding, apply_geocoding, get_state
 
 # Criando logger
 logger = get_logger()
@@ -252,6 +253,9 @@ class ScraperArgenProp:
                     except:
                         expensas = 0.0
 
+                    # VALOR TOTAL (ALUGUEL + EXPENSAS)
+                    valor_total_aluguel = aluguel + expensas
+
                     # IMOBILIARIA
                     try:
                         imobiliaria = i.find('div', 'card__agent').find('img').get('alt').strip().lower()
@@ -262,7 +266,7 @@ class ScraperArgenProp:
                     try:
                         fotos = [p.find('img').get('data-src') for p in i.find('ul', 'card__photos').find_all('li')]
                     except:
-                        fotos = 'Sem info'
+                        fotos = ['Sem info']
 
                     # CARD POINTS - DEFINE A ORDEM EM QUE OS IMOVEIS APARECEM NO SITE (APARENTEMENTE)
                     try:
@@ -356,7 +360,6 @@ class ScraperArgenProp:
                     try:
                         tipo_local_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-tipo_local') != None]
                         tipo_local = amenidades[tipo_local_indice[0]].find('span').text.strip()
-                        # print(tipo_local)
                     except:
                         tipo_local = 'Sem info'
 
@@ -365,20 +368,6 @@ class ScraperArgenProp:
                         wsp = re.findall(r'https://wa\.me/\d+', i.find('div', 'card-contact-group').find('span')['data-href'])[0]
                     except:
                         wsp = 'Sem info'
-
-                    # # Latitude
-                    # try:
-                    #     latitude = get_geocoding(endereco = endereco, bairro = bairro, cidade = cidade)['lat']
-                    # except:
-                    #     latitude = 0.0
-
-                    # # Latitude
-                    # try:
-                    #     longitude = get_geocoding(endereco = endereco, bairro = bairro, cidade = cidade)['lon']
-                    # except:
-                    #     longitude = 0.0
-
-                    # logger.info(f'Guardando os dados da url {x["url"]}')
 
                     # Adicionando à lista
                     dados.append(
@@ -390,14 +379,13 @@ class ScraperArgenProp:
                             cidade, 
                             bairro,
                             endereco,
-                            # latitude,
-                            # longitude,
                             url, 
                             descricao,
                             titulo,
                             aluguel_moeda,
                             aluguel,
                             expensas,
+                            valor_total_aluguel,
                             area,
                             antiguidade, 
                             banheiros,
@@ -436,14 +424,13 @@ class ScraperArgenProp:
                 'cidade', 
                 'bairro',
                 'endereco',
-                # 'latitude',
-                # 'longitude',
                 'url', 
                 'descricao',
                 'titulo',
                 'aluguel_moeda',
                 'aluguel_valor',
                 'expensas',
+                'valor_total_aluguel',
                 'area',
                 'antiguidade', 
                 'banheiros',
@@ -465,12 +452,56 @@ class ScraperArgenProp:
                 'dia'
             ]
         )
+        
+        # Obtendo dados de latitude e longitude
+        logger.info('Obtendo dados de latitude e longitude!')
+
+        res = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers = 10) as executor:
+            # Criando a sequência de tasks que serão submetidas para a thread pool
+            rows = {executor.submit(apply_geocoding, row): row for index, row in df.iterrows()}
+            
+            # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
+            for future in concurrent.futures.as_completed(rows):
+                try:
+                    resultado = future.result()
+                    res.append(resultado)
+                except Exception as exc:
+                    continue
+
+        # Juntando dados de latitude e longitude
+        df_lat_long = (
+            pd.merge(
+                left = df,
+                right = pd.DataFrame(res),
+                on = 'id'
+            )
+            .assign(coordernadas = lambda df: df[['latitude','longitude']].values.tolist())
+        )
+
+        # Dataframe final
+        logger.info('Criando dataframe final!')
+
         df_final = (
-            df
-            .drop(index = df[(df['id'].isnull()) | (df['id'] == 'Sem info')].index)
+            df_lat_long
+            .drop(
+                index = df_lat_long[(df_lat_long['id'].isnull()) | (df_lat_long['id'] == 'Sem info')].index
+            )
             .drop_duplicates(subset = ['id','cidade','tipo_imovel'])
             .sort_values(by = ['cidade','tipo_imovel','bairro'])
             .reset_index(drop = True)
+        )
+
+        # Salvando como parquet
+        logger.info('Salvando dataframe final como parquet!')
+
+        pq.write_to_dataset(
+            table = pa.Table.from_pandas(df_final),
+            root_path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'bronze'),
+            partition_cols = ['ano','mes','dia'],
+            existing_data_behavior = 'delete_matching',
+            use_legacy_dataset = False
         )
 
         return df_final
