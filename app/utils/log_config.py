@@ -1,5 +1,7 @@
 from logging import basicConfig, getLogger, DEBUG, FileHandler, StreamHandler
 import os
+import datetime
+import pytz
 
 def get_logger():
 
@@ -12,7 +14,8 @@ def get_logger():
 
     # Path dos logs
     os.makedirs(log_path, exist_ok  = True)
-    log_file_path = os.path.join(log_path, 'logs.log')
+    data = str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0))
+    log_file_path = os.path.join(log_path, f'logs-{data}.log')
 
     # LOG CONFIGS
     basicConfig(
