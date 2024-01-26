@@ -18,6 +18,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from utils.log_config import get_logger
 from utils.lat_long import get_geocoding, apply_geocoding, get_state
+from geopy.distance import distance
 
 # Criando logger
 logger = get_logger()
@@ -171,32 +172,38 @@ class ScraperArgenProp:
                     estado = get_state(cidade = x['local'])
                 except:
                     estado = 'Sem info'
+                
+                # Dados do dicionário
+                cidade, tipo_imo, base = x['local'], x['tipo'], x['base']
+
+                # Datas
+                data, ano, mes, dia = x['data'], x['ano'], x['mes'], x['dia']
 
                 for i in res:
-                    # CIDADE
-                    try:
-                        # cidade = re.search(r',\s*([^,]+)', i.find('p','card__title--primary show-mobile').text).group(1).replace('Departamento de','').strip()
-                        cidade = x['local']
-                    except:
-                        cidade = 'Sem info'
+                    # # CIDADE
+                    # try:
+                    #     # cidade = re.search(r',\s*([^,]+)', i.find('p','card__title--primary show-mobile').text).group(1).replace('Departamento de','').strip()
+                    #     cidade = x['local']
+                    # except:
+                    #     cidade = 'Sem info'
 
-                    # TIPO IMOVEL
-                    try:
-                        tipo_imo = x['tipo']
-                    except:
-                        tipo_imo = 'Sem info'
+                    # # TIPO IMOVEL
+                    # try:
+                    #     tipo_imo = x['tipo']
+                    # except:
+                    #     tipo_imo = 'Sem info'
 
-                    # BASE DOS DADOS
-                    try:
-                        base = x['base']
-                    except:
-                        base = 'Sem info'
+                    # # BASE DOS DADOS
+                    # try:
+                    #     base = x['base']
+                    # except:
+                    #     base = 'Sem info'
 
-                    # DATA
-                    data = x['data']
-                    ano = x['ano']
-                    mes = x['mes']
-                    dia = x['dia']
+                    # # DATA
+                    # data = x['data']
+                    # ano = x['ano']
+                    # mes = x['mes']
+                    # dia = x['dia']
 
                     # ID DO IMOVEL - OK
                     try:
@@ -253,7 +260,14 @@ class ScraperArgenProp:
                         expensas = 0.0
 
                     # VALOR TOTAL (ALUGUEL + EXPENSAS)
-                    valor_total_aluguel = aluguel + expensas if aluguel_moeda == expensas_moeda else 0.0
+                    if aluguel_moeda == expensas_moeda:
+                        valor_total_aluguel = (aluguel + expensas)
+                    elif aluguel_moeda != expensas_moeda and aluguel_moeda == 'USD':
+                        valor_total_aluguel = (aluguel + expensas/1000)
+                    elif aluguel_moeda != expensas_moeda and aluguel_moeda == '$':
+                        valor_total_aluguel = (aluguel + expensas*1000)
+                    else:
+                        valor_total_aluguel = 0.0
 
                     # IMOBILIARIA
                     try:
@@ -414,46 +428,72 @@ class ScraperArgenProp:
         logger.info('Iteração finalizada. Guardando os dados em um Dataframe!')
 
         # Criando Dataframe
-        df = pd.DataFrame(
-            dados, 
-            columns = [
-                'id',
-                'base',
-                'tipo_imovel',
-                'estado',
-                'cidade', 
-                'bairro',
-                'endereco',
-                'url', 
-                'descricao',
-                'titulo',
-                'aluguel_moeda',
-                'aluguel_valor',
-                'expensas_moeda',
-                'expensas_valor',
-                'valor_total_aluguel',
-                'area',
-                'antiguidade', 
-                'banheiros',
-                'tipo_banheiro',
-                'ambientes',
-                'dormitorios',
-                'orientacao',
-                'garagens',
-                'estado_propriedade',
-                'tipo_local', 
-                'imobiliaria', 
-                'num_fotos',
-                'fotos',
-                'card_points',
-                'wsp',
-                'data',
-                'ano',
-                'mes',
-                'dia'
-            ]
+        df = (
+            pd.DataFrame(
+                dados, 
+                columns = [
+                    'id',
+                    'base',
+                    'tipo_imovel',
+                    'estado',
+                    'cidade', 
+                    'bairro',
+                    'endereco',
+                    'url', 
+                    'descricao',
+                    'titulo',
+                    'aluguel_moeda',
+                    'aluguel_valor',
+                    'expensas_moeda',
+                    'expensas_valor',
+                    'valor_total_aluguel',
+                    'area_util',
+                    'antiguidade', 
+                    'banheiros',
+                    'tipo_banheiro',
+                    'ambientes',
+                    'dormitorios',
+                    'orientacao',
+                    'garagens',
+                    'estado_propriedade',
+                    'tipo_local', 
+                    'imobiliaria', 
+                    'num_fotos',
+                    'fotos',
+                    'card_points',
+                    'wsp',
+                    'data',
+                    'ano',
+                    'mes',
+                    'dia'
+                ]
+            )
+            .pipe(
+                lambda df: df.loc[df.id != 'Sem info'].reset_index(drop = True)
+            )
+            .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
         
+        return df
+    
+    # Função para obter dados geográficos (40 min -> 6 min)
+    async def get_final_dataframe(self):
+        '''
+            ### Objetivo
+            - Inclusão de dados geográficos aos dados dos imóveis
+        '''
+
+        # Função para pegar a distancia lidando com erros
+        def get_distance(coordenada: list = []):
+            try:
+                distancia = round(distance((-32.94002703733129, -60.66512777075645), tuple(coordenada)).km, 3)
+            except:
+                distancia = 9999.0
+            return distancia
+        
+        # Dataframe com dados dos imóveis de todas as páginas
+        df = await self.get_property_data()
+
         # Obtendo dados de latitude e longitude
         logger.info('Obtendo dados de latitude e longitude!')
 
@@ -476,9 +516,35 @@ class ScraperArgenProp:
             pd.merge(
                 left = df,
                 right = pd.DataFrame(res),
+                how = 'left',
                 on = 'id'
             )
-            .assign(coordernadas = lambda df: df[['latitude','longitude']].values.tolist())
+            .assign(coordenadas = lambda df: df[['latitude','longitude']].values.tolist())
+            .assign(
+                distancia_unr = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_provincial = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_baigorria = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_ninos = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_carrasco = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
         )
 
         # Dataframe final
@@ -489,7 +555,7 @@ class ScraperArgenProp:
             .drop(
                 index = df_lat_long[(df_lat_long['id'].isnull()) | (df_lat_long['id'] == 'Sem info')].index
             )
-            .drop_duplicates(subset = ['id','cidade','tipo_imovel'])
+            .drop_duplicates(subset = ['id','cidade', 'tipo_imovel', 'endereco'])
             .sort_values(by = ['cidade','tipo_imovel','bairro'])
             .reset_index(drop = True)
         )
@@ -506,6 +572,7 @@ class ScraperArgenProp:
         )
 
         return df_final
+
 
 # CLASSE DO ZONAPROP
 @dataclass
@@ -557,7 +624,11 @@ class ScraperZonaProp:
             'imoveis':imoveis,
             'paginas': (imoveis//20 + 1) if imoveis > 0 else 0.0,
             'url':url,
-            'html': source_code
+            'html': source_code,
+            'data': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).strftime('%Y-%m-%d %H:%M:%S')),
+            'ano': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).year),
+            'mes': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).month),
+            'dia': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).day)
         }
 
     def get_pages(self):
@@ -633,10 +704,22 @@ class ScraperZonaProp:
 
             # PARSE DO HTML
             soup = BeautifulSoup(i['html'], 'html.parser')
-
             divs = soup.find('div','postings-container').find_all('div')
 
+            # Dados gerais do link
             cidade, tipo_imovel, base = i['local'], i['tipo_imovel'], i['base']
+
+            # ESTADO
+            try:
+                estado = get_state(cidade = cidade)
+            except:
+                estado = 'Sem info'
+
+            # DATA
+            data = i['data']
+            ano = i['ano']
+            mes = i['mes']
+            dia = i['dia']
 
             for i in divs:
                 # ID DO IMÓVEL
@@ -659,7 +742,8 @@ class ScraperZonaProp:
 
                 # MOEDA DO ALUGUEL
                 try:
-                    aluguel_moeda = re.sub(r'[0-9.]', '', i.find('div', {'data-qa': "POSTING_CARD_PRICE"}).text)
+                    aluguel_moeda = re.sub(r'[0-9.]', '', i.find('div', {'data-qa': "POSTING_CARD_PRICE"}).text).strip()
+                    aluguel_moeda = '$' if aluguel_moeda == 'Pesos' else aluguel_moeda
                 except:
                     aluguel_moeda = 'Sem info'
 
@@ -677,16 +761,27 @@ class ScraperZonaProp:
                     
                 # MOEDA DAS EXPENSAS
                 try:
-                    expensas_moeda = re.sub(r'[0-9.Expensas]', '', i.find('div', {'data-qa': "expensas"}).text)
+                    expensas_moeda = re.sub(r'[0-9.Expensas]', '', i.find('div', {'data-qa': "expensas"}).text).strip()
+                    expensas_moeda = '$' if expensas_moeda == 'Pesos' else expensas_moeda
                 except:
                     expensas_moeda = 'Sem info'
 
                     
                 # VALOR DAS EXPENSAS
                 try:
-                    expensas_valor = re.sub(r'[^0-9]', '', i.find('div', {'data-qa': "expensas"}).text)
+                    expensas_valor = float(re.sub(r'[^0-9]', '', i.find('div', {'data-qa': "expensas"}).text))
                 except:
-                    expensas_valor = 'Sem info'
+                    expensas_valor = 0.0
+
+                # VALOR TOTAL (ALUGUEL + EXPENSAS)
+                if aluguel_moeda == expensas_moeda:
+                    valor_total_aluguel = (aluguel_valor + expensas_valor)
+                elif aluguel_moeda != expensas_moeda and aluguel_moeda == 'USD':
+                    valor_total_aluguel = (aluguel_valor + expensas_valor/1000)
+                elif aluguel_moeda != expensas_moeda and aluguel_moeda == '$':
+                    valor_total_aluguel = (aluguel_valor + expensas_valor*1000)
+                else:
+                    valor_total_aluguel = 0.0
                 
                 # ENDERECO
                 try:
@@ -696,7 +791,7 @@ class ScraperZonaProp:
 
                 # BAIRRO
                 try:
-                    bairro = re.match(r'^([^,]+)', (i.find('div', {'data-qa': "POSTING_CARD_LOCATION"}).text.strip()).strip()).group(0)
+                    bairro = re.match(r'^([^,]+)', (i.find('div', {'data-qa': "POSTING_CARD_LOCATION"}).text.strip()).strip()).group(0).strip()
                 except:
                     bairro = 'Sem info'
                 
@@ -762,36 +857,46 @@ class ScraperZonaProp:
 
                 # IMOBILIARIA
                 try:
-                    imobiliaria = re.search('logo_(\w.*)_', i.find('img', {'data-qa': "POSTING_CARD_PUBLISHER"}).get('src')).group(1).replace('-',' ')
+                    dono_direto = i.find('span', 'sc-hlm4rl-4 ihiYoF').text.strip() 
                 except:
-                    imobiliaria = 'Sem info'        
+                    dono_direto = 'Sem info'
+                try:
+                    imobiliaria = re.search('logo_(\w.*)_', i.find('img', {'data-qa': "POSTING_CARD_PUBLISHER"}).get('src')).group(1).replace('-',' ')
+                    imobiliaria = dono_direto if dono_direto != 'Sem info' else imobiliaria
+                except:
+                    imobiliaria = dono_direto if dono_direto != 'Sem info' else 'Sem info'
 
                 # LISTA FINAL
                 dados.append(
                     [
                         id_imovel, 
                         base,
-                        cidade,
                         tipo_imovel,
-                        url_imovel, 
-                        # fotos, 
+                        estado,
+                        cidade,
+                        bairro, 
+                        endereco, 
+                        url_imovel,
+                        descricao, 
+                        titulo, 
                         aluguel_moeda, 
                         aluguel_valor, 
                         desconto_aluguel,
                         expensas_moeda, 
                         expensas_valor, 
-                        endereco, 
-                        bairro, 
-                        destaque,
+                        valor_total_aluguel,
                         area_total, 
                         area_util, 
                         ambientes, 
                         dormitorios, 
                         banheiros, 
                         garagens, 
-                        titulo, 
-                        descricao, 
-                        imobiliaria
+                        destaque,
+                        imobiliaria,
+                        data,
+                        ano,
+                        mes,
+                        dia
                     ]
                 )
 
@@ -799,34 +904,125 @@ class ScraperZonaProp:
             pd.DataFrame(
                 dados,
                 columns = [
-                    'id_imovel', 
+                    'id', 
                     'base',
-                    'cidade',
                     'tipo_imovel',
-                    'url_imovel', 
-                    # 'fotos', 
+                    'estado',
+                    'cidade',
+                    'bairro', 
+                    'endereco', 
+                    'url',
+                    'descricao', 
+                    'titulo', 
                     'aluguel_moeda', 
                     'aluguel_valor', 
                     'desconto_aluguel',
                     'expensas_moeda', 
                     'expensas_valor', 
-                    'endereco', 
-                    'bairro', 
-                    'destaque',
+                    'valor_total_aluguel',
                     'area_total', 
-                    'area_util', 
+                    'area_util', # No argenprop, a área disponível já é a útil
                     'ambientes', 
                     'dormitorios', 
                     'banheiros', 
                     'garagens', 
-                    'titulo', 
-                    'descricao', 
-                    'imobiliaria'
+                    'destaque',
+                    'imobiliaria',
+                    'data',
+                    'ano',
+                    'mes',
+                    'dia'
                 ]
             )
             .pipe(
-                lambda df: df.loc[df.id_imovel != 'Sem info'].reset_index(drop = True)
+                lambda df: df.loc[df.id != 'Sem info'].reset_index(drop = True)
             )
+            .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
 
         return df
+
+    def get_final_dataframe(self):
+
+        # Dataframe com dados dos imóveis
+        df = self.get_property_data()
+
+        # Função para pegar a distancia lidando com erros
+        def get_distance(coordenada: list = []):
+            try:
+                distancia = round(distance((-32.94002703733129, -60.66512777075645), tuple(coordenada)).km, 3)
+            except:
+                distancia = 9999.0
+            return distancia
+        
+        # Obtendo dados de longitude e latitude
+        res = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers = 10) as executor:
+            # Criando a sequência de tasks que serão submetidas para a thread pool
+            rows = {executor.submit(apply_geocoding, row): row for index, row in df.iterrows()}
+            
+            # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
+            for future in concurrent.futures.as_completed(rows):
+                try:
+                    resultado = future.result()
+                    res.append(resultado)
+                except Exception as exc:
+                    continue
+
+        # Juntando dados de latitude e longitude
+        df_lat_long = (
+            pd.merge(
+                left = df,
+                right = pd.DataFrame(res),
+                how = 'left',
+                on = 'id'
+            )
+            .assign(coordenadas = lambda df: df[['latitude','longitude']].values.tolist())
+            .assign(
+                distancia_unr = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_provincial = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_baigorria = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_ninos = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+            .assign(
+                distancia_hospital_carrasco = lambda df: df['coordenadas'].apply(
+                    lambda x: get_distance(x)
+                )
+            )
+        )
+
+        # Dataframe final
+        df_final = (
+            df_lat_long
+            .drop(
+                index = df_lat_long[(df_lat_long['id'].isnull()) | (df_lat_long['id'] == 'Sem info')].index
+            )
+            .drop_duplicates(subset = ['id','cidade','tipo_imovel', 'endereco'])
+            .sort_values(by = ['cidade','tipo_imovel','bairro'])
+            .reset_index(drop = True)
+        )
+
+        # Salvando como parquet
+        pq.write_to_dataset(
+            table = pa.Table.from_pandas(df_final),
+            root_path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'bronze'),
+            partition_cols = ['ano','mes','dia'],
+            existing_data_behavior = 'delete_matching',
+            use_legacy_dataset = False
+        )
+        return df_final
