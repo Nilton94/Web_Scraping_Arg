@@ -1,8 +1,8 @@
 import pandas as pd
-from pandas import json_normalize
+# from pandas import json_normalize
 import requests
 from bs4 import BeautifulSoup
-from random_user_agent.user_agent import UserAgent
+# from random_user_agent.user_agent import UserAgent
 import concurrent.futures
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -17,8 +17,11 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from utils.log_config import get_logger
-from utils.lat_long import get_geocoding, apply_geocoding, get_state
+from utils.lat_long import apply_geocoding, get_state, get_distance_unr, get_distance_provincial, get_distance_baigorria, get_distance_ninos, get_distance_carrasco
 from geopy.distance import distance
+import streamlit as st
+from aiocache import cached
+from aiocache.serializers import PickleSerializer
 
 # Criando logger
 logger = get_logger()
@@ -33,6 +36,8 @@ class ScraperArgenProp:
 
 
     # Retorna a página async
+    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @cached(ttl = 86400, serializer=PickleSerializer())
     async def get_page(self, session, url):
         '''
             ### Objetivo 
@@ -66,6 +71,8 @@ class ScraperArgenProp:
 
         
     # Estimativa do total de páginas do tipo e local especificado, com base no total de imóveis retornado (base com 20 imóveis por página)
+    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @cached(ttl = 86400, serializer=PickleSerializer())
     async def total_pages(self):
         '''
             ### Objetivo 
@@ -107,6 +114,8 @@ class ScraperArgenProp:
             logger.error(f'Erro na operação: {e}')
 
     # Retorna todas as páginas de forma async
+    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @cached(ttl = 86400, serializer=PickleSerializer())
     async def get_all_pages(self):
         '''
             ### Objetivo 
@@ -144,6 +153,8 @@ class ScraperArgenProp:
         except Exception as e:
             logger.error(f'Erro na operação: {e}')
 
+    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @cached(ttl = 86400, serializer=PickleSerializer())
     async def get_property_data(self):
         '''
             ### Objetivo
@@ -338,8 +349,9 @@ class ScraperArgenProp:
                     try:
                         ambientes_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_ambientes') != None]
                         ambientes = amenidades[ambientes_indice[0]].find('span').text.strip()
+                        ambientes = 1.0 if ambientes.lower().__contains__('mono') else float(re.sub('[^0-9]', '', ambientes))
                     except:
-                        ambientes = 'Sem info'
+                        ambientes = 0.0
                     
                     # DORMITORIOS
                     try:
@@ -477,19 +489,13 @@ class ScraperArgenProp:
         return df
     
     # Função para obter dados geográficos (40 min -> 6 min)
+    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @cached(ttl = 86400, serializer=PickleSerializer())
     async def get_final_dataframe(self):
         '''
             ### Objetivo
             - Inclusão de dados geográficos aos dados dos imóveis
         '''
-
-        # Função para pegar a distancia lidando com erros
-        def get_distance(coordenada: list = []):
-            try:
-                distancia = round(distance((-32.94002703733129, -60.66512777075645), tuple(coordenada)).km, 3)
-            except:
-                distancia = 9999.0
-            return distancia
         
         # Dataframe com dados dos imóveis de todas as páginas
         df = await self.get_property_data()
@@ -522,27 +528,27 @@ class ScraperArgenProp:
             .assign(coordenadas = lambda df: df[['latitude','longitude']].values.tolist())
             .assign(
                 distancia_unr = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_unr(x)
                 )
             )
             .assign(
                 distancia_hospital_provincial = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_provincial(x)
                 )
             )
             .assign(
                 distancia_hospital_baigorria = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_baigorria(x)
                 )
             )
             .assign(
                 distancia_hospital_ninos = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_ninos(x)
                 )
             )
             .assign(
                 distancia_hospital_carrasco = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_carrasco(x)
                 )
             )
         )
@@ -583,6 +589,7 @@ class ScraperZonaProp:
     _local: list = None
 
 
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def extract_pages(self, url):
         '''
             * Retorna o total de imóveis do tipo passado
@@ -631,6 +638,7 @@ class ScraperZonaProp:
             'dia': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).day)
         }
 
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_pages(self):
         '''
             * Recebe os tipos de imóveis e os locais e obtém o total de páginas puxando a função extract_pages usando threads
@@ -658,6 +666,7 @@ class ScraperZonaProp:
         return pd.DataFrame(dados).sort_values('imoveis', ascending = False).reset_index(drop=True)
         
 
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_all_pages(self):
         '''
             * Retorna o código fonte de todas as páginas com base nos critérios selecionados
@@ -689,6 +698,7 @@ class ScraperZonaProp:
         
         return dados
 
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_property_data(self):
         '''
             * Com base nos códigos html de cada página, extrai os dados dos imóveis
@@ -765,7 +775,6 @@ class ScraperZonaProp:
                     expensas_moeda = '$' if expensas_moeda == 'Pesos' else expensas_moeda
                 except:
                     expensas_moeda = 'Sem info'
-
                     
                 # VALOR DAS EXPENSAS
                 try:
@@ -942,18 +951,11 @@ class ScraperZonaProp:
 
         return df
 
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_final_dataframe(self):
 
         # Dataframe com dados dos imóveis
         df = self.get_property_data()
-
-        # Função para pegar a distancia lidando com erros
-        def get_distance(coordenada: list = []):
-            try:
-                distancia = round(distance((-32.94002703733129, -60.66512777075645), tuple(coordenada)).km, 3)
-            except:
-                distancia = 9999.0
-            return distancia
         
         # Obtendo dados de longitude e latitude
         res = []
@@ -981,27 +983,27 @@ class ScraperZonaProp:
             .assign(coordenadas = lambda df: df[['latitude','longitude']].values.tolist())
             .assign(
                 distancia_unr = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_unr(x)
                 )
             )
             .assign(
                 distancia_hospital_provincial = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_provincial(x)
                 )
             )
             .assign(
                 distancia_hospital_baigorria = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_baigorria(x)
                 )
             )
             .assign(
                 distancia_hospital_ninos = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_ninos(x)
                 )
             )
             .assign(
                 distancia_hospital_carrasco = lambda df: df['coordenadas'].apply(
-                    lambda x: get_distance(x)
+                    lambda x: get_distance_carrasco(x)
                 )
             )
         )

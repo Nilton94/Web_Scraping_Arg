@@ -1,4 +1,5 @@
 from geopy.geocoders import Nominatim
+from geopy.distance import distance
 import geocoder
 import pandas as pd
 import os
@@ -10,7 +11,7 @@ from concurrent.futures import ProcessPoolExecutor
 # Criando logger
 logger = get_logger()
 
-# Lista com as províncias e municípios, incluindo departamentos
+# Retorna estado com base na cidade passada
 def get_state(cidade: str = ''):
     try:
         
@@ -64,10 +65,39 @@ def get_state(cidade: str = ''):
         # logger.error(f'Erro na obtenção dos dados: {e}')
         return ''
 
+def get_all_states():
+
+    logger.info('Agrupando dados de província e departamentos!')
+    
+    # JSON COM DADOS DE MUNICIPIO/DEPARTAMENTO E PROVINCIA
+    df_mun = pd.read_parquet(
+        os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
+    )
+    df_mun_final = df_mun[['municipio_tratado','provincia_tratada']].drop_duplicates()
+
+    df_dpt = pd.read_parquet(
+        os.path.join(os.getcwd(),'data','geograficos','departamentos') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','departamentos')
+    )
+    df_dpt_final = df_dpt[['departamento', 'provincia']].drop_duplicates()
+
+    json_mun = {row['municipio_tratado']:row['provincia_tratada'] for index, row in df_mun_final.iterrows()}
+    json_dpt = {row['departamento']:row['provincia'] for index, row in df_dpt_final.iterrows()}
+
+    estado = {**json_dpt, **json_mun}
+
+    # Retornando Estado
+    return estado
+    
 def get_geocoding(endereco: str = '', bairro: str = '', cidade: str = '', estado: str = '', pais: str = 'Argentina', user_agent: str = 'web_scraping_arg'):
     '''
         ### Objetivo
         - Função para retornar a latitude e longitude de um endereço
+        ### Parâmetros
+        - endereco: endereço do imóvel
+        - bairro: bairro do imóvel
+        - cidade: cidade do imóvel
+        - estado: estado de localização do imóvel
+        - pais: país de localização do imóvel, default 'Argentina'
     '''
 
     endereco = '' if (endereco == None or endereco.lower() == 'sem info') else endereco
@@ -102,6 +132,9 @@ def apply_geocoding(row, max_tentativas: int = 3):
     '''
         ### Objetivo:
         - Aplica a função a um dataframe e retorna a latitude e longitude com base no endereço 
+        ### Parâmetros:
+        - row: linha de um dataframe retornada durante uma iteração
+        - max_tentativas: máximo de tentativas caso a requisição falhe ou veja nula
     '''
     time.sleep(1)
 
@@ -130,3 +163,54 @@ def apply_geocoding(row, max_tentativas: int = 3):
         }
     
     return resultado
+
+# Função para pegar a distancia lidando com erros
+def get_distance_unr(coordenada: list = []):
+    try:
+        distancia = round(
+            distance((-32.94002703733129, -60.66512777075645), tuple(coordenada)).km, 
+            3
+        )
+    except:
+        distancia = 9999.0
+    return distancia
+
+def get_distance_provincial(coordenada: list = []):
+    try:
+        distancia = round(
+            distance((-32.95532893189587, -60.629488104849905), tuple(coordenada)).km, 
+            3
+        )
+    except:
+        distancia = 9999.0
+    return distancia
+
+def get_distance_baigorria(coordenada: list = []):
+    try:
+        distancia = round(
+            distance((-32.855384310532656, -60.704628940365566), tuple(coordenada)).km, 
+            3
+        )
+    except:
+        distancia = 9999.0
+    return distancia
+
+def get_distance_ninos(coordenada: list = []):
+    try:
+        distancia = round(
+            distance((-32.96587782771106, -60.65125791535292), tuple(coordenada)).km, 
+            3
+        )
+    except:
+        distancia = 9999.0
+    return distancia
+
+def get_distance_carrasco(coordenada: list = []):
+    try:
+        distancia = round(
+            distance((-32.94595943742149, -60.679916866738836), tuple(coordenada)).km, 
+            3
+        )
+    except:
+        distancia = 9999.0
+    return distancia
