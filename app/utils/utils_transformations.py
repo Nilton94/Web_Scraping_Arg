@@ -2,6 +2,8 @@ import pandas as pd
 from functools import reduce
 from utils.utils_scraper import ScraperArgenProp, ScraperZonaProp
 import asyncio
+import geopandas as gpd
+from shapely.geometry import Point
 
 class TiposImoveis:
     
@@ -51,13 +53,43 @@ def get_columns_intersection(*dataframes: pd.DataFrame) -> list[str]:
     return list(colunas)
 
 async def fetch_argenprop_data(locais: list[str] = None, tipos: list[str] = None):
+    '''
+        ### Objetivo:
+            - Retorna a base do site Argenprop de acordo com os parâmetros de local e tipo
+        ### Parâmetros:
+            - locais: local do imóvel
+            - tipos: tipos do imóvel
+    '''
     
     df_argenprop = await ScraperArgenProp(_tipo = tipos, _local = locais).get_final_dataframe()
-    
     return df_argenprop
 
 def fetch_zonaprop_data(locais: list[str] = None, tipos: list[str] = None):
-    
-    df_argenprop = ScraperArgenProp(_tipo = tipos, _local = locais).get_final_dataframe()
-    
-    return df_argenprop
+    '''
+        ### Objetivo:
+            - Retorna a base do site Argenprop de acordo com os parâmetros de local e tipo
+        ### Parâmetros:
+            - locais: local do imóvel
+            - tipos: tipos do imóvel
+    '''
+
+    df_zonaprop = ScraperZonaProp(_tipo = tipos, _local = locais).get_final_dataframe()
+    return df_zonaprop
+
+def df_to_geopandas(df: pd.DataFrame):
+    '''
+        ### Objetivo:
+            - Recebe como parâmetro um pd.DataFrame e o converte em o GeoDataFrame
+    '''
+
+    if 'coordenadas' in df.columns:
+        df['coordenadas'] = df['coordenadas'].apply(Point)
+        geodf = (
+            gpd.GeoDataFrame(data = df, geometry = 'coordenadas')
+            .pipe(
+                lambda df: df.dropna(subset = ['latitude', 'longitude', 'coordenadas'])
+            )
+        )
+        return geodf
+    else:
+        raise NameError('DataFrame não possui a coluna de coordenadas!')

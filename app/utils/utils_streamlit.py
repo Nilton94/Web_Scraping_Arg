@@ -34,6 +34,7 @@ def get_widgets():
         key = 'colunas_tabela'
     )
 
+    
     st.sidebar.slider(
         'Distância para UNR (km)',
         min_value = 0.0,
