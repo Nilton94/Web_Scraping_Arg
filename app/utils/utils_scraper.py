@@ -20,6 +20,7 @@ from geopy.distance import distance
 import streamlit as st
 from aiocache import cached
 from aiocache.serializers import PickleSerializer
+import unidecode
 
 # Criando logger
 logger = get_logger()
@@ -240,6 +241,7 @@ class ScraperArgenProp:
                     # BAIRRO - OK
                     try:
                         bairro = re.match(r'^([^,]+)', (i.find('p','card__title--primary show-mobile').text).strip()).group(0)
+                        bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
                     except:
                         bairro = 'Sem info'
 
@@ -697,7 +699,7 @@ class ScraperZonaProp:
     # @st.cache_data(ttl = 86400, max_entries = 100)
     def get_property_data(self):
         '''
-            * Com base nos códigos html de cada página, extrai os dados dos imóveis
+            Com base nos códigos html de cada página, extrai os dados dos imóveis
         '''
 
         # dados das páginas
@@ -708,202 +710,206 @@ class ScraperZonaProp:
 
         for i in x:
 
-            # PARSE DO HTML
-            soup = BeautifulSoup(i['html'], 'html.parser')
-            divs = soup.find('div','postings-container').find_all('div')
-
-            # Dados gerais do link
-            cidade, tipo_imovel, base = i['local'], i['tipo_imovel'], i['base']
-
-            # ESTADO
             try:
-                estado = get_state(cidade = cidade)
+                # PARSE DO HTML
+                soup = BeautifulSoup(i['html'], 'html.parser')
+                divs = soup.find('div','postings-container').find_all('div')
+
+                # Dados gerais do link
+                cidade, tipo_imovel, base = i['local'], i['tipo_imovel'], i['base']
+
+                # ESTADO
+                try:
+                    estado = get_state(cidade = cidade)
+                except:
+                    estado = 'Sem info'
+
+                # DATA
+                data = i['data']
+                ano = i['ano']
+                mes = i['mes']
+                dia = i['dia']
+
+                for i in divs:
+                    # ID DO IMÓVEL
+                    try:
+                        id_imovel = i.find('div', {'data-qa': "posting PROPERTY"}).get('data-id').strip()
+                    except:
+                        id_imovel = 'Sem info'
+
+                    # URL DO IMOVEL
+                    try:
+                        url_imovel = 'https://www.zonaprop.com.ar' + i.find('div', {'data-qa': "posting PROPERTY"}).get('data-to-posting').strip()
+                    except:
+                        url_imovel = 'Sem info'
+
+                    # FOTOS
+                    try:
+                        fotos = [x.get('src') or x.get('data-flickity-lazyload') for x in i.find('div', 'flickity-slider').find_all('img')]
+                    except:
+                        fotos = []
+
+                    # MOEDA DO ALUGUEL
+                    try:
+                        aluguel_moeda = re.sub(r'[0-9.]', '', i.find('div', {'data-qa': "POSTING_CARD_PRICE"}).text).strip()
+                        aluguel_moeda = '$' if aluguel_moeda == 'Pesos' else aluguel_moeda
+                    except:
+                        aluguel_moeda = 'Sem info'
+
+                    # VALOR DO ALUGUEL
+                    try:
+                        aluguel_valor = float(re.sub(r'[^0-9]', '', i.find('div', {'data-qa': "POSTING_CARD_PRICE"}).text))
+                    except:
+                        aluguel_valor = 0.0
+                        
+                    # DESCONTO NO ALUGUEL
+                    try:
+                        desconto_aluguel = i.find('div', 'sc-12dh9kl-5 foYfuB').text.strip()
+                    except:
+                        desconto_aluguel = 'Sem info'
+                        
+                    # MOEDA DAS EXPENSAS
+                    try:
+                        expensas_moeda = re.sub(r'[0-9.Expensas]', '', i.find('div', {'data-qa': "expensas"}).text).strip()
+                        expensas_moeda = '$' if expensas_moeda == 'Pesos' else expensas_moeda
+                    except:
+                        expensas_moeda = 'Sem info'
+                        
+                    # VALOR DAS EXPENSAS
+                    try:
+                        expensas_valor = float(re.sub(r'[^0-9]', '', i.find('div', {'data-qa': "expensas"}).text))
+                    except:
+                        expensas_valor = 0.0
+
+                    # VALOR TOTAL (ALUGUEL + EXPENSAS)
+                    if aluguel_moeda == expensas_moeda:
+                        valor_total_aluguel = (aluguel_valor + expensas_valor)
+                    elif aluguel_moeda != expensas_moeda and aluguel_moeda == 'USD':
+                        valor_total_aluguel = (aluguel_valor + expensas_valor/1000)
+                    elif aluguel_moeda != expensas_moeda and aluguel_moeda == '$':
+                        valor_total_aluguel = (aluguel_valor + expensas_valor*1000)
+                    else:
+                        valor_total_aluguel = 0.0
+                    
+                    # ENDERECO
+                    try:
+                        endereco = i.find('div', 'sc-ge2uzh-0 eXwAuU').text.strip()
+                    except:
+                        endereco = 'Sem info'
+
+                    # BAIRRO
+                    try:
+                        bairro = re.match(r'^([^,]+)', (i.find('div', {'data-qa': "POSTING_CARD_LOCATION"}).text.strip()).strip()).group(0).strip()
+                        bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
+                    except:
+                        bairro = 'Sem info'
+                    
+                    # DESTAQUE
+                    try:
+                        destaque = i.find('span', 'sc-ryls1p-0 bzIPYI').text.strip()
+                    except:
+                        destaque = 'Sem info'
+                    
+                    # LISTA AMENIDADES
+                    try:
+                        amenidades = i.find('div', {'data-qa': "POSTING_CARD_FEATURES"}).find_all('span')
+                    except:
+                        amenidades = []
+
+                    # AREA TOTAL
+                    try:
+                        area_total = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eLhfrW') != None][0]
+                    except:
+                        area_total = 0.0
+
+                    # AREA UTIL (cubierta)
+                    try:
+                        area_util = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 dRoEma') != None][0]
+                    except:
+                        area_util = 0.0
+
+                    # AMBIENTES
+                    try:
+                        ambientes = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 jkEBRn') != None][0]
+                    except:
+                        ambientes = 0.0
+
+                    # DORMITORIOS
+                    try:
+                        dormitorios = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 ljuqxM') != None][0]
+                    except:
+                        dormitorios = 0.0
+
+                    # BANHEIROS
+                    try:
+                        banheiros = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 foetjI') != None][0]
+                    except:
+                        banheiros = 0.0
+                    
+                    # GARAGENS
+                    try:
+                        garagens = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eykaou') != None][0]
+                    except:
+                        garagens = 0.0
+
+                    # TITULO
+                    try:
+                        titulo = i.find('h2', 'sc-i1odl-11 kvKUxE').text.strip()
+                    except:
+                        titulo = 'Sem info'
+
+                    # DESCRICAO
+                    try:
+                        descricao = i.find('div', {'data-qa': "POSTING_CARD_DESCRIPTION"}).text.strip()
+                    except:
+                        descricao = 'Sem info'
+
+                    # IMOBILIARIA
+                    try:
+                        dono_direto = i.find('span', 'sc-hlm4rl-4 ihiYoF').text.strip() 
+                    except:
+                        dono_direto = 'Sem info'
+                    try:
+                        imobiliaria = re.search('logo_(\w.*)_', i.find('img', {'data-qa': "POSTING_CARD_PUBLISHER"}).get('src')).group(1).replace('-',' ')
+                        imobiliaria = dono_direto if dono_direto != 'Sem info' else imobiliaria
+                    except:
+                        imobiliaria = dono_direto if dono_direto != 'Sem info' else 'Sem info'
+
+                    # LISTA FINAL
+                    dados.append(
+                        [
+                            id_imovel, 
+                            base,
+                            tipo_imovel,
+                            estado,
+                            cidade,
+                            bairro, 
+                            endereco, 
+                            url_imovel,
+                            descricao, 
+                            titulo, 
+                            aluguel_moeda, 
+                            aluguel_valor, 
+                            desconto_aluguel,
+                            expensas_moeda, 
+                            expensas_valor, 
+                            valor_total_aluguel,
+                            area_total, 
+                            area_util, 
+                            ambientes, 
+                            dormitorios, 
+                            banheiros, 
+                            garagens, 
+                            destaque,
+                            imobiliaria,
+                            data,
+                            ano,
+                            mes,
+                            dia
+                        ]
+                    )
             except:
-                estado = 'Sem info'
-
-            # DATA
-            data = i['data']
-            ano = i['ano']
-            mes = i['mes']
-            dia = i['dia']
-
-            for i in divs:
-                # ID DO IMÓVEL
-                try:
-                    id_imovel = i.find('div', {'data-qa': "posting PROPERTY"}).get('data-id').strip()
-                except:
-                    id_imovel = 'Sem info'
-
-                # URL DO IMOVEL
-                try:
-                    url_imovel = 'https://www.zonaprop.com.ar' + i.find('div', {'data-qa': "posting PROPERTY"}).get('data-to-posting').strip()
-                except:
-                    url_imovel = 'Sem info'
-
-                # FOTOS
-                try:
-                    fotos = [x.get('src') or x.get('data-flickity-lazyload') for x in i.find('div', 'flickity-slider').find_all('img')]
-                except:
-                    fotos = []
-
-                # MOEDA DO ALUGUEL
-                try:
-                    aluguel_moeda = re.sub(r'[0-9.]', '', i.find('div', {'data-qa': "POSTING_CARD_PRICE"}).text).strip()
-                    aluguel_moeda = '$' if aluguel_moeda == 'Pesos' else aluguel_moeda
-                except:
-                    aluguel_moeda = 'Sem info'
-
-                # VALOR DO ALUGUEL
-                try:
-                    aluguel_valor = float(re.sub(r'[^0-9]', '', i.find('div', {'data-qa': "POSTING_CARD_PRICE"}).text))
-                except:
-                    aluguel_valor = 0.0
-                    
-                # DESCONTO NO ALUGUEL
-                try:
-                    desconto_aluguel = i.find('div', 'sc-12dh9kl-5 foYfuB').text.strip()
-                except:
-                    desconto_aluguel = 'Sem info'
-                    
-                # MOEDA DAS EXPENSAS
-                try:
-                    expensas_moeda = re.sub(r'[0-9.Expensas]', '', i.find('div', {'data-qa': "expensas"}).text).strip()
-                    expensas_moeda = '$' if expensas_moeda == 'Pesos' else expensas_moeda
-                except:
-                    expensas_moeda = 'Sem info'
-                    
-                # VALOR DAS EXPENSAS
-                try:
-                    expensas_valor = float(re.sub(r'[^0-9]', '', i.find('div', {'data-qa': "expensas"}).text))
-                except:
-                    expensas_valor = 0.0
-
-                # VALOR TOTAL (ALUGUEL + EXPENSAS)
-                if aluguel_moeda == expensas_moeda:
-                    valor_total_aluguel = (aluguel_valor + expensas_valor)
-                elif aluguel_moeda != expensas_moeda and aluguel_moeda == 'USD':
-                    valor_total_aluguel = (aluguel_valor + expensas_valor/1000)
-                elif aluguel_moeda != expensas_moeda and aluguel_moeda == '$':
-                    valor_total_aluguel = (aluguel_valor + expensas_valor*1000)
-                else:
-                    valor_total_aluguel = 0.0
-                
-                # ENDERECO
-                try:
-                    endereco = i.find('div', 'sc-ge2uzh-0 eXwAuU').text.strip()
-                except:
-                    endereco = 'Sem info'
-
-                # BAIRRO
-                try:
-                    bairro = re.match(r'^([^,]+)', (i.find('div', {'data-qa': "POSTING_CARD_LOCATION"}).text.strip()).strip()).group(0).strip()
-                except:
-                    bairro = 'Sem info'
-                
-                # DESTAQUE
-                try:
-                    destaque = i.find('span', 'sc-ryls1p-0 bzIPYI').text.strip()
-                except:
-                    destaque = 'Sem info'
-                
-                # LISTA AMENIDADES
-                try:
-                    amenidades = i.find('div', {'data-qa': "POSTING_CARD_FEATURES"}).find_all('span')
-                except:
-                    amenidades = []
-
-                # AREA TOTAL
-                try:
-                    area_total = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eLhfrW') != None][0]
-                except:
-                    area_total = 0.0
-
-                # AREA UTIL (cubierta)
-                try:
-                    area_util = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 dRoEma') != None][0]
-                except:
-                    area_util = 0.0
-
-                # AMBIENTES
-                try:
-                    ambientes = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 jkEBRn') != None][0]
-                except:
-                    ambientes = 0.0
-
-                # DORMITORIOS
-                try:
-                    dormitorios = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 ljuqxM') != None][0]
-                except:
-                    dormitorios = 0.0
-
-                # BANHEIROS
-                try:
-                    banheiros = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 foetjI') != None][0]
-                except:
-                    banheiros = 0.0
-                
-                # GARAGENS
-                try:
-                    garagens = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eykaou') != None][0]
-                except:
-                    garagens = 0.0
-
-                # TITULO
-                try:
-                    titulo = i.find('h2', 'sc-i1odl-11 kvKUxE').text.strip()
-                except:
-                    titulo = 'Sem info'
-
-                # DESCRICAO
-                try:
-                    descricao = i.find('div', {'data-qa': "POSTING_CARD_DESCRIPTION"}).text.strip()
-                except:
-                    descricao = 'Sem info'
-
-                # IMOBILIARIA
-                try:
-                    dono_direto = i.find('span', 'sc-hlm4rl-4 ihiYoF').text.strip() 
-                except:
-                    dono_direto = 'Sem info'
-                try:
-                    imobiliaria = re.search('logo_(\w.*)_', i.find('img', {'data-qa': "POSTING_CARD_PUBLISHER"}).get('src')).group(1).replace('-',' ')
-                    imobiliaria = dono_direto if dono_direto != 'Sem info' else imobiliaria
-                except:
-                    imobiliaria = dono_direto if dono_direto != 'Sem info' else 'Sem info'
-
-                # LISTA FINAL
-                dados.append(
-                    [
-                        id_imovel, 
-                        base,
-                        tipo_imovel,
-                        estado,
-                        cidade,
-                        bairro, 
-                        endereco, 
-                        url_imovel,
-                        descricao, 
-                        titulo, 
-                        aluguel_moeda, 
-                        aluguel_valor, 
-                        desconto_aluguel,
-                        expensas_moeda, 
-                        expensas_valor, 
-                        valor_total_aluguel,
-                        area_total, 
-                        area_util, 
-                        ambientes, 
-                        dormitorios, 
-                        banheiros, 
-                        garagens, 
-                        destaque,
-                        imobiliaria,
-                        data,
-                        ano,
-                        mes,
-                        dia
-                    ]
-                )
+                continue
 
         df = (
             pd.DataFrame(
