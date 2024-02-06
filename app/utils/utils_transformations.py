@@ -4,6 +4,8 @@ from utils.utils_scraper import ScraperArgenProp, ScraperZonaProp
 import asyncio
 import geopandas as gpd
 from shapely.geometry import Point
+import unidecode
+import re
 
 class TiposImoveis:
     
@@ -81,6 +83,8 @@ def df_to_geopandas(df: pd.DataFrame):
         ### Objetivo:
             - Recebe como parâmetro um pd.DataFrame e o converte em o GeoDataFrame
     '''
+
+    df.bairro = df.bairro.apply(lambda x: unidecode.unidecode(str(re.sub(' +', ' ', x.strip())).lower()))
 
     if 'coordenadas' in df.columns:
         df['coordenadas'] = df['coordenadas'].apply(Point)

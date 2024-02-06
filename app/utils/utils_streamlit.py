@@ -1,6 +1,10 @@
 import streamlit as st
+import folium
+import pandas as pd
+import os
 from utils.lat_long import get_all_states
 from utils.utils_transformations import TiposImoveis, get_columns_intersection
+from folium.plugins import GroupedLayerControl
 
 def get_widgets():
     # WIDGETS
@@ -74,3 +78,102 @@ def get_widgets():
         label = 'Atualizar',
         key = 'atualizar'
     )
+
+    # area util
+    # banheiros
+    # ambientes
+    # dormitorios
+    # aluguel moeda
+    # aluguel valor
+    # expensas moeda
+    # expensas valor
+
+def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
+    '''
+        Cria um mapa com base no dataframe passado
+
+        Parâmetros:
+        ----------
+        df: pd.DataFrame
+            dataframe com dados geográficos
+        tipo_layer: 'bairro' ou 'base'
+            define qual layer será definido no mapa
+            impossibilidade de colocar um mesmo marker em layers diferentes
+    '''
+
+    # Inicializando o mapa
+    m = folium.Map(
+        location = [-32.945, -60.667],
+        zoom_start = 15
+    )
+
+    # Criando grupos de layers para filtrar, dentro do mapa, a base
+    zonaprop_group = folium.FeatureGroup("Zonaprop")
+    argenprop_group = folium.FeatureGroup("Argenprop")
+
+    # Layers dos bairros. cria uma layer pra cada bairro distinto
+    dict_bairros = {}
+
+    for i in df.bairro.sort_values().unique():
+        dict_bairros[i] = folium.FeatureGroup(i)
+
+    for _, row in df.iterrows():
+        # Definindo o ícone
+        zona_icon = [
+            folium.features.CustomIcon(os.path.join(os.getcwd(), 'assets', 'argenprop.jpg') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'assets', 'argenprop.jpg'), icon_size=(22, 26))
+            if row['base'] == 'argenprop'
+            else folium.features.CustomIcon(os.path.join(os.getcwd(), 'assets', 'zonaprop.png') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'assets', 'zonaprop.png'), icon_size=(22, 26))
+        ][0]
+        
+        # Criando marker
+        marker = folium.Marker(
+            location = [row.latitude, row.longitude],
+            popup = f'''
+                <b>Base</b>: {row['base']} <br> 
+                <b>Endereço</b>:  {row['endereco']} <br> 
+                <b>Imobiliária</b>:  {row['imobiliaria']} <br> 
+                <b>Área Útil</b>:  {row['area_util']} <br> 
+                <b>Dormitórios</b>:  {row['dormitorios']} <br> 
+                <b>Ambientes</b>:  {row['ambientes']} <br> 
+                <b>Banheiros</b>:  {row['banheiros']} <br> 
+                <b>Link</b>:  <a href={row['url']}>{row['url']}</a> <br> 
+            ''',
+            # hoover
+            tooltip = f'''
+                <b>Tipo de Imóvel</b>: {row['tipo_imovel']} <br>
+                <b>Bairro</b>: {row['bairro']} <br> 
+                <b>Aluguel ({row.aluguel_moeda})</b>: {row['aluguel_valor']} <br> 
+                <b>Expensas ({row.expensas_moeda})</b>: {row['expensas_valor']} <br> 
+                <b>Valor Total ({row.aluguel_moeda})</b>: {row.valor_total_aluguel}
+            ''',
+            icon = zona_icon
+        )
+
+        if tipo_layer == 'bairro':
+            marker.add_to(dict_bairros[row['bairro']])
+        else:
+            if row['base'] == 'argenprop':
+                marker.add_to(argenprop_group)
+            else:
+                marker.add_to(zonaprop_group)
+    
+    if tipo_layer == 'bairro':
+        for i in dict_bairros:
+            m.add_child(dict_bairros[i])
+        
+        GroupedLayerControl(
+            groups = {'Bairros': [dict_bairros[i] for i in dict_bairros]},
+            collapsed = True,
+            exclusive_groups = False
+        ).add_to(m)
+    else:
+        m.add_child(zonaprop_group)
+        m.add_child(argenprop_group)
+    
+        GroupedLayerControl(
+            groups = {'Base de Busca': [zonaprop_group, argenprop_group]},
+            collapsed = True,
+            exclusive_groups=False
+        ).add_to(m)
+
+    return m
