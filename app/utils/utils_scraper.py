@@ -241,13 +241,14 @@ class ScraperArgenProp:
                     # BAIRRO - OK
                     try:
                         bairro = re.match(r'^([^,]+)', (i.find('p','card__title--primary show-mobile').text).strip()).group(0)
-                        bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
+                        # bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
                     except:
                         bairro = 'Sem info'
 
                     # ALUGUEL - MOEDA
                     try:
                         aluguel_moeda = i.find('span','card__currency').text
+                        aluguel_moeda = 'Sem info' if 'consultar' in aluguel_moeda.lower() else aluguel_moeda
                     except:
                         aluguel_moeda = 'Sem info'
                     
@@ -355,7 +356,7 @@ class ScraperArgenProp:
                     # DORMITORIOS
                     try:
                         dormitorios_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_dormitorios') != None]
-                        dormitorios = float(re.match('[0-9]{1,}', amenidades[dormitorios_indice[0]].find('span').text.strip()).group(0))
+                        dormitorios = 1.0 if 'mono' in amenidades[dormitorios_indice[0]].find('span').text.lower().strip() else float(re.match('[0-9]{1,}', amenidades[dormitorios_indice[0]].find('span').text.strip()).group(0))
                     except:
                         dormitorios = 0.0
 
@@ -550,6 +551,7 @@ class ScraperArgenProp:
                     lambda x: get_distance_carrasco(x)
                 )
             )
+            .assign(bairro = lambda df: df.bairro.apply(lambda x: unidecode.unidecode(str(re.sub(' +', ' ', x.strip())).lower())))
         )
 
         # Dataframe final
@@ -753,6 +755,7 @@ class ScraperZonaProp:
                     try:
                         aluguel_moeda = re.sub(r'[0-9.]', '', i.find('div', {'data-qa': "POSTING_CARD_PRICE"}).text).strip()
                         aluguel_moeda = '$' if aluguel_moeda == 'Pesos' else aluguel_moeda
+                        aluguel_moeda = 'Sem info' if 'consultar' in aluguel_moeda.lower() else aluguel_moeda
                     except:
                         aluguel_moeda = 'Sem info'
 
@@ -800,7 +803,7 @@ class ScraperZonaProp:
                     # BAIRRO
                     try:
                         bairro = re.match(r'^([^,]+)', (i.find('div', {'data-qa': "POSTING_CARD_LOCATION"}).text.strip()).strip()).group(0).strip()
-                        bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
+                        # bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
                     except:
                         bairro = 'Sem info'
                     
@@ -830,7 +833,13 @@ class ScraperZonaProp:
 
                     # AMBIENTES
                     try:
-                        ambientes = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 jkEBRn') != None][0]
+                        # ambientes = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 jkEBRn') != None][0]
+                        ambientes = [
+                            1.0 if 'mono' in amenidades[i].find('span').text.lower().strip()
+                            else float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) 
+                            for i, s in enumerate(amenidades) 
+                            if s.find('img','sc-1uhtbxc-1 jkEBRn') != None
+                        ][0]
                     except:
                         ambientes = 0.0
 
@@ -1008,6 +1017,7 @@ class ScraperZonaProp:
                     lambda x: get_distance_carrasco(x)
                 )
             )
+            .assign(bairro = lambda df: df.bairro.apply(lambda x: unidecode.unidecode(str(re.sub(' +', ' ', x.strip())).lower())))
         )
 
         # Dataframe final
