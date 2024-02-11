@@ -7,56 +7,90 @@ from utils.utils_transformations import TiposImoveis, get_columns_intersection
 from folium.plugins import GroupedLayerControl
 import asyncio
 from utils.utils_scraper import ScraperArgenProp, ScraperZonaProp
+import smtplib
+import email.message
 
 def get_widgets():
     # WIDGETS
     locais = list(get_all_states().keys())
     locais.sort()
 
+    with st.expander('### Principais Filtros'):
+        # with st.container(height = 120, border=True):
+        col1_r1, col2_r1, col3_r1, col4_r1, col5_r1 = st.columns(5)
+        col1_r2, col2_r2, col3_r2, col4_r2, col5_r2 = st.columns(5)
+        
+        col1_r1.multiselect(
+            label = 'Base de Busca',
+            options = ['Argenprop','Zonaprop'],
+            key = 'base_busca'
+        )
 
-    st.sidebar.multiselect(
-        label = 'Base de Busca',
-        options = ['Argenprop','Zonaprop'],
-        key = 'base_busca'
-    )
+        col2_r1.multiselect(
+            label = 'Locais',
+            options = locais,
+            key = 'locais'
+        )
 
-    st.sidebar.multiselect(
-        label = 'Locais',
-        options = locais,
-        key = 'locais'
-    )
+        col3_r1.multiselect(
+            label = 'Tipos de Imóveis',
+            options = TiposImoveis().total_tipos(),
+            key = 'tipos'
+        )
 
-    st.sidebar.multiselect(
-        label = 'Tipos de Imóveis',
-        options = TiposImoveis().total_tipos(),
-        key = 'tipos'
-    )
+        col4_r1.multiselect(
+            'Moeda do Aluguel',
+            options = ['USD', '$', 'Sem info'],
+            key = 'aluguel_moeda'
+        )
 
-    st.sidebar.multiselect(
-        'Moeda do Aluguel',
-        options = ['USD', '$', 'Sem info'],
-        key = 'aluguel_moeda'
-    )
+        col1_r2.slider(
+            'Aluguel',
+            min_value = 0,
+            max_value = 999_999,
+            value = (0, 999_999),
+            step = 1000,
+            key = 'aluguel_valor'
+        )
 
-    st.sidebar.slider(
-        'Aluguel',
-        min_value = 0.0,
-        max_value = 999_999_999.0,
-        key = 'aluguel_valor'
-    )
+        col5_r1.multiselect(
+            'Moeda das Expensas',
+            options = ['USD', '$', 'Sem info'],
+            key = 'expensas_moeda'
+        )
 
-    st.sidebar.multiselect(
-        'Moeda das Expensas',
-        options = ['USD', '$', 'Sem info'],
-        key = 'expensas_moeda'
-    )
+        col2_r2.slider(
+            'Expensas',
+            min_value = 0,
+            max_value = 999_999,
+            value = (0, 999_999),
+            step = 1000,
+            key = 'expensas_valor'
+        )
 
-    st.sidebar.slider(
-        'Expensas',
-        min_value = 0.0,
-        max_value = 999_999_999.0,
-        key = 'expensas_valor'
-    )
+        col3_r2.slider(
+            'Ambientes',
+            min_value = 0,
+            max_value = 100,
+            value = (0, 100),
+            key = 'ambientes'
+        )
+
+        col4_r2.slider(
+            'Dormitórios',
+            min_value = 0,
+            max_value = 100,
+            value = (0, 100),
+            key = 'dormitorios'
+        )
+
+        col5_r2.slider(
+            'Distância para UNR (km)',
+            min_value = 0.0,
+            max_value = 60.0,
+            value = (0.0, 100.0),
+            key = 'distancia_unr'
+        )
 
     # st.sidebar.multiselect(
     #     label = 'Colunas da tabela',
@@ -65,18 +99,37 @@ def get_widgets():
     #             'distancia_unr','latitude','longitude','coordenadas','data','ano','mes','dia'],
     #     key = 'colunas_tabela'
     # )
-    
-    st.sidebar.slider(
-        'Distância para UNR (km)',
-        min_value = 0.0,
-        max_value = 60.0,
-        key = 'distancia_unr'
+
+    st.sidebar.markdown('### Opções')
+
+    st.sidebar.button(
+        label = '## Limpar Lista de Ids',
+        key = 'limpar',
+        type = 'primary',
+        use_container_width = True,
+        help = "Ao clicar em um imóvel, este é incluido em uma lista de interesse. Para reiniciar a lista, basta clicar no botão."
     )
 
+    st.sidebar.text_input(
+        label = 'E-mail',
+        key = 'email_usuario',
+         help = 'E-mail para enviar os imóveis selecionados.'
+    )
+
+    st.sidebar.button(
+        label = 'Enviar E-mail',
+        key = 'email',
+        type = 'primary',
+        use_container_width=True,
+        help = '(WIP) Envia a lista de imóveis selecionados para o e-mail passado.'
+    )
+
+    st.sidebar.markdown('### Outros Filtros')
     st.sidebar.slider(
         'Distância para Hospital Provincial (km)',
         min_value = 0.0,
         max_value = 60.0,
+        value = (0.0, 100.0),
         key = 'distancia_provincial'
     )
 
@@ -84,6 +137,7 @@ def get_widgets():
         'Distância para Hospital de Niños (km)',
         min_value = 0.0,
         max_value = 60.0,
+        value = (0.0, 100.0),
         key = 'distancia_ninos'
     )
 
@@ -91,6 +145,7 @@ def get_widgets():
         'Distância para Hospital Carrasco (km)',
         min_value = 0.0,
         max_value = 60.0,
+        value = (0.0, 100.0),
         key = 'distancia_carrasco'
     )
 
@@ -98,6 +153,7 @@ def get_widgets():
         'Distância para Hospital Baigorria (km)',
         min_value = 0.0,
         max_value = 60.0,
+        value = (0.0, 100.0),
         key = 'distancia_baigorria'
     )
 
@@ -105,34 +161,22 @@ def get_widgets():
         'Área Útil (m2)',
         min_value = 0.0,
         max_value = 999.0,
+        value = (0.0, 999.0),
         key = 'area_util'
     )
 
     st.sidebar.slider(
         'Banheiros',
-        min_value = 0.0,
-        max_value = 999.0,
+        min_value = 0,
+        max_value = 100,
+        value = (0, 100),
         key = 'banheiros'
     )
-
-    st.sidebar.slider(
-        'Ambientes',
-        min_value = 0.0,
-        max_value = 999.0,
-        key = 'ambientes'
-    )
-
-    st.sidebar.slider(
-        'Dormitórios',
-        min_value = 0.0,
-        max_value = 999.0,
-        key = 'dormitorios'
-    )
     
-    st.sidebar.button(
-        label = 'Atualizar',
-        key = 'atualizar'
-    )
+    # st.sidebar.button(
+    #     label = 'Atualizar',
+    #     key = 'atualizar'
+    # )
 
 def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
     '''
@@ -175,6 +219,7 @@ def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
         marker = folium.Marker(
             location = [row.latitude, row.longitude],
             popup = f'''
+                <b>Id</b>: {row['id']} <br>
                 <b>Base</b>: {row['base']} <br> 
                 <b>Endereço</b>:  {row['endereco']} <br> 
                 <b>Imobiliária</b>:  {row['imobiliaria']} <br> 
@@ -224,7 +269,7 @@ def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
 
     return m
 
-def get_dataframe():
+def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame = None):
     
     # DADOS
     if ('Argenprop' in st.session_state.base_busca) and ('Zonaprop' in st.session_state.base_busca):
@@ -241,22 +286,25 @@ def get_dataframe():
             )
             .pipe(
                 lambda df: df.loc[
-                    (df.distancia_unr.between(0.0, st.session_state.distancia_unr if st.session_state.distancia_unr > 0.0 else 999_999_999.0))
-                    & (df.distancia_hospital_provincial.between(0.0, (st.session_state.distancia_provincial if st.session_state.distancia_provincial > 0.0 else 999_999_999.0)))
-                    & (df.distancia_hospital_ninos.between(0.0, (st.session_state.distancia_ninos if st.session_state.distancia_ninos > 0.0 else 999_999_999.0)))
-                    & (df.distancia_hospital_carrasco.between(0.0, (st.session_state.distancia_carrasco if st.session_state.distancia_carrasco > 0.0 else 999_999_999.0)))
-                    & (df.distancia_hospital_baigorria.between(0.0, (st.session_state.distancia_baigorria if st.session_state.distancia_baigorria > 0.0 else 999_999_999.0)))
-                    & (df.area_util.between(0.0, (st.session_state.area_util if st.session_state.area_util > 0.0 else 999_999_999.0)))
-                    & (df.banheiros.between(0.0, (st.session_state.banheiros if st.session_state.banheiros > 0.0 else 999_999_999.0)))
-                    & (df.ambientes.between(0.0, (st.session_state.ambientes if st.session_state.ambientes > 0.0 else 999_999_999.0)))
-                    & (df.dormitorios.between(0.0, (st.session_state.dormitorios if st.session_state.dormitorios > 0.0 else 999_999_999.0)))
-                    & (df.aluguel_valor.between(0.0, (st.session_state.aluguel_valor if st.session_state.aluguel_valor > 0.0 else 999_999_999.0)))
-                    & (df.expensas_valor.between(0.0, (st.session_state.expensas_valor if st.session_state.expensas_valor > 0.0 else 999_999_999.0)))
-                    # & (df.aluguel_moeda.isin([]))
-                    # 'aluguel_moeda'
-                    # 'aluguel_valor'
-                    # 'expensas_moeda'
-                    # 'expensas_valor'
+                    (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
+                    & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
+                    & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
+                    & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
+                    & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
+                    & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                    & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                    & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                    & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                    & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                    & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                    & (df.aluguel_moeda.isin(
+                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                        )
+                    )
+                    & (df.expensas_moeda.isin(
+                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                        )
+                    )
                 ]
             )
             .reset_index(drop = True)
@@ -269,11 +317,25 @@ def get_dataframe():
             df_argenprop
             .pipe(
                 lambda df: df.loc[
-                    (df.distancia_unr.between(0.0, st.session_state.distancia_unr if st.session_state.distancia_unr > 0.0 else 60.0))
-                    & (df.distancia_hospital_provincial.between(0.0, (st.session_state.distancia_provincial if st.session_state.distancia_provincial > 0.0 else 60.0)))
-                    & (df.distancia_hospital_ninos.between(0.0, (st.session_state.distancia_ninos if st.session_state.distancia_ninos > 0.0 else 60.0)))
-                    & (df.distancia_hospital_carrasco.between(0.0, (st.session_state.distancia_carrasco if st.session_state.distancia_carrasco > 0.0 else 60.0)))
-                    & (df.distancia_hospital_baigorria.between(0.0, (st.session_state.distancia_baigorria if st.session_state.distancia_baigorria > 0.0 else 60.0)))
+                    (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
+                    & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
+                    & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
+                    & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
+                    & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
+                    & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                    & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                    & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                    & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                    & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                    & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                    & (df.aluguel_moeda.isin(
+                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                        )
+                    )
+                    & (df.expensas_moeda.isin(
+                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                        )
+                    )
                 ]
             )
             .reset_index(drop = True)
@@ -286,11 +348,25 @@ def get_dataframe():
             df_zonaprop
             .pipe(
                 lambda df: df.loc[
-                    (df.distancia_unr.between(0.0, st.session_state.distancia_unr if st.session_state.distancia_unr > 0.0 else 60.0))
-                    & (df.distancia_hospital_provincial.between(0.0, (st.session_state.distancia_provincial if st.session_state.distancia_provincial > 0.0 else 60.0)))
-                    & (df.distancia_hospital_ninos.between(0.0, (st.session_state.distancia_ninos if st.session_state.distancia_ninos > 0.0 else 60.0)))
-                    & (df.distancia_hospital_carrasco.between(0.0, (st.session_state.distancia_carrasco if st.session_state.distancia_carrasco > 0.0 else 60.0)))
-                    & (df.distancia_hospital_baigorria.between(0.0, (st.session_state.distancia_baigorria if st.session_state.distancia_baigorria > 0.0 else 60.0)))
+                    (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
+                    & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
+                    & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
+                    & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
+                    & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
+                    & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                    & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                    & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                    & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                    & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                    & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                    & (df.aluguel_moeda.isin(
+                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                        )
+                    )
+                    & (df.expensas_moeda.isin(
+                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                        )
+                    )
                 ]
             )
             .reset_index(drop = True)
@@ -298,3 +374,53 @@ def get_dataframe():
 
     else:
         st.text('Selecione uma ou mais bases!')
+
+    return df_final
+
+def send_mail(df: pd.DataFrame, email: str = None):
+    '''
+        Envia e-mail com os dados dos imóveis selecionados.
+
+        Parâmetros:
+        -----------
+        df: pd.Dataframe
+            Base de imóveis selecionados.
+        email: str
+            E-mail passado no sidebar.
+    '''
+
+    '''Função para enviar e-mail com status das tabelas da Superlógica'''
+
+    # Definindo o corpo do email
+    corpo_email = f"""
+    <p>Olá,</p>
+    <p>Confira abaixo a lista com os imóveis selecionados.
+    <p></p>
+    """
+
+    # lista de emails
+    lista_emails = st.session_state.email_usuario
+
+    # Loop para enviar um email por vez
+    for i in range(0,len(lista_emails)):
+        # Parâmetros do smtp
+        msg = email.message.Message()
+        msg['Subject'] = f"Lista de imóveis selecionados"
+        msg['From'] = "niltontestespython@gmail.com"
+        msg['To'] = lista_emails[i]
+        senha = "vizdadnhueorajpk"
+        msg.add_header('Content-Type','text/html')
+        msg.set_payload(corpo_email)
+
+        # Definindo a conexão e enviando
+        s = smtplib.SMTP('smtp.gmail.com: 587')
+        s.starttls()
+        s.login(msg['From'], senha)
+        
+        s.sendmail(
+            msg['From'],
+            [msg['To']],
+            msg.as_string().encode('utf-8')
+        )
+
+        print(f"Email enviado para {msg['To']}")

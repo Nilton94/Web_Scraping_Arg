@@ -590,7 +590,7 @@ class ScraperZonaProp:
     _local: list = None
 
 
-    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def extract_pages(self, url):
         '''
             * Retorna o total de imóveis do tipo passado
@@ -639,7 +639,7 @@ class ScraperZonaProp:
             'dia': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).day)
         }
 
-    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_pages(self):
         '''
             * Recebe os tipos de imóveis e os locais e obtém o total de páginas puxando a função extract_pages usando threads
@@ -666,7 +666,7 @@ class ScraperZonaProp:
         
         return pd.DataFrame(dados).sort_values('imoveis', ascending = False).reset_index(drop=True)
 
-    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_all_pages(self):
         '''
             * Retorna o código fonte de todas as páginas com base nos critérios selecionados
@@ -698,7 +698,7 @@ class ScraperZonaProp:
         
         return dados
 
-    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_property_data(self):
         '''
             Com base nos códigos html de cada página, extrai os dados dos imóveis
@@ -962,7 +962,7 @@ class ScraperZonaProp:
 
         return df
 
-    # @st.cache_data(ttl = 86400, max_entries = 100)
+    @st.cache_data(ttl = 86400, max_entries = 100)
     def get_final_dataframe(self):
 
         # Dataframe com dados dos imóveis
