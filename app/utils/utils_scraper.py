@@ -18,7 +18,7 @@ from utils.log_config import get_logger
 from utils.lat_long import apply_geocoding, get_state, get_distance_unr, get_distance_provincial, get_distance_baigorria, get_distance_ninos, get_distance_carrasco
 from geopy.distance import distance
 import streamlit as st
-from aiocache import cached
+from aiocache import cached, Cache
 from aiocache.serializers import PickleSerializer
 import unidecode
 
@@ -36,7 +36,7 @@ class ScraperArgenProp:
 
     # Retorna a página async
     # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer())
+    @cached(ttl = 86400, serializer = PickleSerializer(), cache=Cache.MEMORY)
     async def get_page(self, session, url):
         '''
             ### Objetivo 
@@ -70,7 +70,7 @@ class ScraperArgenProp:
         
     # Estimativa do total de páginas do tipo e local especificado, com base no total de imóveis retornado (base com 20 imóveis por página)
     # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer())
+    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def total_pages(self):
         '''
             ### Objetivo 
@@ -113,7 +113,7 @@ class ScraperArgenProp:
 
     # Retorna todas as páginas de forma async
     # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer())
+    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_all_pages(self):
         '''
             ### Objetivo 
@@ -152,7 +152,7 @@ class ScraperArgenProp:
             logger.error(f'Erro na operação: {e}')
 
     # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer())
+    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_property_data(self):
         '''
             ### Objetivo
@@ -490,7 +490,7 @@ class ScraperArgenProp:
     
     # Função para obter dados geográficos (40 min -> 6 min)
     # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer())
+    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_final_dataframe(self):
         '''
             ### Objetivo

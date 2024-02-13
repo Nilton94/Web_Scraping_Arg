@@ -9,6 +9,17 @@ import asyncio
 from utils.utils_scraper import ScraperArgenProp, ScraperZonaProp
 import smtplib
 import email.message
+import re
+import textwrap
+from dotenv import load_dotenv
+from io import BytesIO
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from email.mime.text import MIMEText
+import openpyxl
+
+# Carregando variáveis de ambiente
+load_dotenv()
 
 def get_widgets():
     # WIDGETS
@@ -92,39 +103,24 @@ def get_widgets():
             key = 'distancia_unr'
         )
 
-    # st.sidebar.multiselect(
-    #     label = 'Colunas da tabela',
-    #     options = ['id', 'base','tipo_imovel','estado','cidade','bairro', 'endereco', 'url','descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor', 'expensas_moeda', 'expensas_valor', 'valor_total_aluguel',
-    #             'area_util','ambientes', 'dormitorios', 'banheiros', 'garagens', 'imobiliaria','distancia_hospital_baigorria','distancia_hospital_carrasco','distancia_hospital_ninos','distancia_hospital_provincial',
-    #             'distancia_unr','latitude','longitude','coordenadas','data','ano','mes','dia'],
-    #     key = 'colunas_tabela'
-    # )
-
-    st.sidebar.markdown('### Opções')
-
-    st.sidebar.button(
-        label = '## Limpar Lista de Ids',
-        key = 'limpar',
-        type = 'primary',
-        use_container_width = True,
-        help = "Ao clicar em um imóvel, este é incluido em uma lista de interesse. Para reiniciar a lista, basta clicar no botão."
-    )
-
-    st.sidebar.text_input(
-        label = 'E-mail',
-        key = 'email_usuario',
-         help = 'E-mail para enviar os imóveis selecionados.'
-    )
-
-    st.sidebar.button(
-        label = 'Enviar E-mail',
-        key = 'email',
-        type = 'primary',
-        use_container_width=True,
-        help = '(WIP) Envia a lista de imóveis selecionados para o e-mail passado.'
-    )
-
     st.sidebar.markdown('### Outros Filtros')
+
+    st.sidebar.slider(
+        'Área Útil (m2)',
+        min_value = 0.0,
+        max_value = 999.0,
+        value = (0.0, 999.0),
+        key = 'area_util'
+    )
+
+    st.sidebar.slider(
+        'Banheiros',
+        min_value = 0,
+        max_value = 100,
+        value = (0, 100),
+        key = 'banheiros'
+    )
+    
     st.sidebar.slider(
         'Distância para Hospital Provincial (km)',
         min_value = 0.0,
@@ -157,26 +153,31 @@ def get_widgets():
         key = 'distancia_baigorria'
     )
 
-    st.sidebar.slider(
-        'Área Útil (m2)',
-        min_value = 0.0,
-        max_value = 999.0,
-        value = (0.0, 999.0),
-        key = 'area_util'
+def get_email_widgets():
+
+    st.text_input(
+        label = 'E-mails (separados por vírgula)',
+        key = 'email_usuario',
+         help = 'E-mail para enviar os imóveis selecionados.'
     )
 
-    st.sidebar.slider(
-        'Banheiros',
-        min_value = 0,
-        max_value = 100,
-        value = (0, 100),
-        key = 'banheiros'
+    e1, e2 = st.columns(2)
+    e1.button(
+        label = '## Limpar Lista de Ids',
+        key = 'limpar',
+        type = 'primary',
+        use_container_width = True,
+        help = "Ao clicar em um imóvel, este é incluido em uma lista de interesse. Para reiniciar a lista, basta clicar no botão."
     )
     
-    # st.sidebar.button(
-    #     label = 'Atualizar',
-    #     key = 'atualizar'
-    # )
+
+    e2.button(
+        label = 'Enviar E-mail',
+        key = 'enviar_email',
+        type = 'primary',
+        use_container_width = True,
+        help = '(WIP) Envia a lista de imóveis selecionados para o e-mail passado.'
+    )
 
 def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
     '''
@@ -377,7 +378,7 @@ def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame =
 
     return df_final
 
-def send_mail(df: pd.DataFrame, email: str = None):
+def send_mail(df: pd.DataFrame, emails: str = None):
     '''
         Envia e-mail com os dados dos imóveis selecionados.
 
@@ -389,28 +390,42 @@ def send_mail(df: pd.DataFrame, email: str = None):
             E-mail passado no sidebar.
     '''
 
-    '''Função para enviar e-mail com status das tabelas da Superlógica'''
+    # Criando arquivo excel em memória
+    excel_file = BytesIO()
+    df.to_excel(excel_file, index=False)
+    excel_file.seek(0)  # movendo cursor para o início do arquivo
 
     # Definindo o corpo do email
-    corpo_email = f"""
-    <p>Olá,</p>
-    <p>Confira abaixo a lista com os imóveis selecionados.
-    <p></p>
-    """
+    corpo_email = textwrap.dedent(
+        # f"""
+        #     <html>
+        #     <head></head>
+        #     <body>
+        #         <p>Olá, </p>
+        #         <p>Confira abaixo a lista com os imóveis selecionados.</p>
+        #     </body>
+        #     </html>
+        # """
+        'Olá, confira abaixo a lista com os imóveis selecionados.'
+    )
 
     # lista de emails
-    lista_emails = st.session_state.email_usuario
+    lista_emails = [x for x in re.sub('\s+','', st.session_state.email_usuario).split(',')]
 
     # Loop para enviar um email por vez
     for i in range(0,len(lista_emails)):
-        # Parâmetros do smtp
-        msg = email.message.Message()
+        msg = MIMEMultipart()
         msg['Subject'] = f"Lista de imóveis selecionados"
-        msg['From'] = "niltontestespython@gmail.com"
+        msg['From'] = os.getenv(key = "EMAIL")
         msg['To'] = lista_emails[i]
-        senha = "vizdadnhueorajpk"
+        senha = os.getenv(key = "EMAIL_PASSWORD")
         msg.add_header('Content-Type','text/html')
-        msg.set_payload(corpo_email)
+        # msg.set_payload(corpo_email)
+
+        part = MIMEApplication(excel_file.getvalue(), Name = 'dataframe.xlsx')
+        part['Content-Disposition'] = f'attachment; filename="dataframe.xlsx"'
+        msg.attach(part)
+        msg.attach(MIMEText(corpo_email, "plain"))
 
         # Definindo a conexão e enviando
         s = smtplib.SMTP('smtp.gmail.com: 587')
@@ -422,5 +437,3 @@ def send_mail(df: pd.DataFrame, email: str = None):
             [msg['To']],
             msg.as_string().encode('utf-8')
         )
-
-        print(f"Email enviado para {msg['To']}")

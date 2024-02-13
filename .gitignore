@@ -1,3 +1,4 @@
 # Arquivos excluídos
 .venv
 *teste*
+*.env*
