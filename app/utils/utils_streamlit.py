@@ -17,6 +17,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
 import openpyxl
+from utils.utils_storage import ParquetStorage
 
 # Carregando variáveis de ambiente
 load_dotenv()
@@ -270,8 +271,99 @@ def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
 
     return m
 
-def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame = None):
+
+def get_paths():
+
+    return {
+        'path_page_argenprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'paginas'),
+        'path_page_zonaprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'paginas'),
+        'bronze_argenprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze'),
+        'silver_argenprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'silver'),
+        'bronze_zonaprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze'),
+        'silver_zonaprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver')
+    }
+
+def get_zonaprop():
     
+    # Paths
+    path_page_zonaprop = get_paths()['path_page_zonaprop']
+    bronze_zonaprop = get_paths()['bronze_zonaprop']
+    silver_zonaprop = get_paths()['silver_zonaprop']
+
+    # Checando se os dados do dia atual existem
+    ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_parquet()
+    ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).check_parquet()
+    ParquetStorage(_path = silver_zonaprop, _locais = st.session_state.locais).check_parquet()
+
+    # Checando se existem arquivos
+    check_page_zonaprop = ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_files()
+    check_bronze_zonaprop = ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).check_files()
+
+    # Checando os tipos de imóveis nao disponíveis
+    check_tipo_bronze = ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).types_intersection()
+
+    # Caso não exista arquivo na página bronze, carrega tudo
+    if check_bronze_zonaprop == 0:
+        df_zonaprop = ScraperZonaProp(_tipo = st.session_state.tipos, _local = st.session_state.locais).get_final_dataframe()
+
+    # Caso exista arquivo, e alguns dos tipos nao esteja disponivel, carrega apenas os tipos faltantes
+    elif check_bronze_zonaprop > 0 and len(check_tipo_bronze) > 0:
+        df_zonaprop = ScraperZonaProp(_tipo = check_tipo_bronze, _local = st.session_state.locais).get_final_dataframe()
+        df_zonaprop = pd.read_parquet(
+            path = get_paths()['silver_zonaprop'],
+            filters = [('cidade', 'in', st.session_state.locais)]
+        )
+
+    elif check_bronze_zonaprop > 0 and len(check_tipo_bronze) == 0:
+        df_zonaprop = pd.read_parquet(
+            path = get_paths()['silver_zonaprop'],
+            filters = [('cidade', 'in', st.session_state.locais)]
+        )
+    
+    return df_zonaprop
+    
+def get_argenprop():
+    
+    # Paths
+    path_page_argenprop = get_paths()['path_page_argenprop']
+    bronze_argenprop = get_paths()['bronze_argenprop']
+    silver_argenprop = get_paths()['silver_argenprop']
+
+    # Checando se os dados do dia atual existem
+    ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_parquet()
+    ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).check_parquet()
+    ParquetStorage(_path = silver_argenprop, _locais = st.session_state.locais).check_parquet()
+
+    # Checando se existem arquivos
+    check_page_argenprop = ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_files()
+    check_bronze_argenprop = ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).check_files()
+
+    # Checando os tipos de imóveis nao disponíveis
+    check_tipo_bronze = ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).types_intersection()
+
+    # Caso não exista arquivo na página bronze, carrega tudo
+    if check_bronze_argenprop == 0:
+        df_zonaprop = ScraperZonaProp(_tipo = st.session_state.tipos, _local = st.session_state.locais).get_final_dataframe()
+
+    # Caso exista arquivo, e alguns dos tipos nao esteja disponivel, carrega apenas os tipos faltantes
+    elif check_bronze_argenprop > 0 and len(check_tipo_bronze) > 0:
+        df_argenprop = asyncio.run(ScraperArgenProp(st.session_state.tipos, st.session_state.locais).get_final_dataframe())
+        df_argenprop = pd.read_parquet(
+            path = get_paths()['silver_argenprop'],
+            filters = [('cidade', 'in', st.session_state.locais)]
+        )
+        
+    elif check_bronze_argenprop > 0 and len(check_tipo_bronze) == 0:
+        df_argenprop = pd.read_parquet(
+            path = get_paths()['silver_argenprop'],
+            filters = [('cidade', 'in', st.session_state.locais)]
+        )
+    
+    return df_argenprop
+
+def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame = None):
+
+
     # DADOS
     if ('Argenprop' in st.session_state.base_busca) and ('Zonaprop' in st.session_state.base_busca):
         df_argenprop = asyncio.run(ScraperArgenProp(st.session_state.tipos, st.session_state.locais).get_final_dataframe())

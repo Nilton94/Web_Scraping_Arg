@@ -1,5 +1,5 @@
 import pandas as pd
-import requests
+# import requests
 from bs4 import BeautifulSoup
 import concurrent.futures
 import pyarrow as pa
@@ -18,8 +18,8 @@ from utils.log_config import get_logger
 from utils.lat_long import apply_geocoding, get_state, get_distance_unr, get_distance_provincial, get_distance_baigorria, get_distance_ninos, get_distance_carrasco
 from geopy.distance import distance
 import streamlit as st
-from aiocache import cached, Cache
-from aiocache.serializers import PickleSerializer
+# from aiocache import cached, Cache
+# from aiocache.serializers import PickleSerializer
 import unidecode
 
 # Criando logger
@@ -35,8 +35,7 @@ class ScraperArgenProp:
 
 
     # Retorna a página async
-    # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer = PickleSerializer(), cache=Cache.MEMORY)
+    # @cached(ttl = 86400, serializer = PickleSerializer(), cache=Cache.MEMORY)
     async def get_page(self, session, url):
         '''
             ### Objetivo 
@@ -54,7 +53,7 @@ class ScraperArgenProp:
                 html_source = await response.text()
                 return {
                     'local': re.compile(r'\.com/(.*?)/alquiler/(.*?)\?').search(url).group(2),
-                    'tipo': re.compile(r'\.com/(.*?)/alquiler/(.*?)\?').search(url).group(1),
+                    'tipo_imovel': re.compile(r'\.com/(.*?)/alquiler/(.*?)\?').search(url).group(1),
                     'imoveis': float(re.sub('[^0-9]','',BeautifulSoup(html_source, 'html.parser').find('p','listing-header__results').text)) if BeautifulSoup(html_source, 'html.parser').find('p','listing-header__results') != None else 0.0,
                     'base': re.search(r'www\.(.*?)\.com', url).group(1),
                     'url': url, 
@@ -69,8 +68,7 @@ class ScraperArgenProp:
             logger.error(f'Erro na operação: {e}')
         
     # Estimativa do total de páginas do tipo e local especificado, com base no total de imóveis retornado (base com 20 imóveis por página)
-    # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
+    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def total_pages(self):
         '''
             ### Objetivo 
@@ -106,14 +104,25 @@ class ScraperArgenProp:
                 .assign(paginas = lambda x: round(x['imoveis']/20 + 2.0))
             )
 
+            # Salvando os dados de página
+            path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'paginas')
+            
+            pq.write_to_dataset(
+                table = pa.Table.from_pandas(page_df),
+                root_path = path,
+                existing_data_behavior = 'delete_matching',
+                basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_paginas_argenprop_'+ '{i}.parquet',
+                use_legacy_dataset = False
+            )
+
+            # Retornando df 
             return page_df
         
         except Exception as e:
             logger.error(f'Erro na operação: {e}')
 
     # Retorna todas as páginas de forma async
-    # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
+    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_all_pages(self):
         '''
             ### Objetivo 
@@ -134,7 +143,7 @@ class ScraperArgenProp:
                 f'https://www.argenprop.com/{tipo}/alquiler/{local}?pagina-{pagina}' 
                 for tipo in self._tipo 
                 for local in self._local 
-                for max_pages in [int(page_df[(page_df['tipo'] == tipo) & (page_df['local'] == local)]['paginas'].max())]
+                for max_pages in [int(page_df[(page_df['tipo_imovel'] == tipo) & (page_df['local'] == local)]['paginas'].max())]
                 for pagina in range(1, max_pages + 1)
             ]
 
@@ -151,8 +160,7 @@ class ScraperArgenProp:
         except Exception as e:
             logger.error(f'Erro na operação: {e}')
 
-    # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
+    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_property_data(self):
         '''
             ### Objetivo
@@ -183,37 +191,13 @@ class ScraperArgenProp:
                     estado = 'Sem info'
                 
                 # Dados do dicionário
-                cidade, tipo_imo, base = x['local'], x['tipo'], x['base']
+                cidade, tipo_imo, base = x['local'], x['tipo_imovel'], x['base']
 
                 # Datas
                 data, ano, mes, dia = x['data'], x['ano'], x['mes'], x['dia']
 
                 for i in res:
-                    # # CIDADE
-                    # try:
-                    #     # cidade = re.search(r',\s*([^,]+)', i.find('p','card__title--primary show-mobile').text).group(1).replace('Departamento de','').strip()
-                    #     cidade = x['local']
-                    # except:
-                    #     cidade = 'Sem info'
-
-                    # # TIPO IMOVEL
-                    # try:
-                    #     tipo_imo = x['tipo']
-                    # except:
-                    #     tipo_imo = 'Sem info'
-
-                    # # BASE DOS DADOS
-                    # try:
-                    #     base = x['base']
-                    # except:
-                    #     base = 'Sem info'
-
-                    # # DATA
-                    # data = x['data']
-                    # ano = x['ano']
-                    # mes = x['mes']
-                    # dia = x['dia']
-
+                    
                     # ID DO IMOVEL - OK
                     try:
                         id = i.find('a').get('data-item-card')
@@ -486,11 +470,22 @@ class ScraperArgenProp:
             .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
         
+        # Salvando dados iniciais
+        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze')
+            
+        pq.write_to_dataset(
+            table = pa.Table.from_pandas(df),
+            root_path = path,
+            existing_data_behavior = 'delete_matching',
+            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_argenprop_'+ '{i}.parquet',
+            use_legacy_dataset = False
+        )
+
+        # Retornando df
         return df
     
     # Função para obter dados geográficos (40 min -> 6 min)
-    # @st.cache_data(ttl = 86400, max_entries = 100)
-    @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
+    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_final_dataframe(self):
         '''
             ### Objetivo
@@ -570,11 +565,14 @@ class ScraperArgenProp:
         # Salvando como parquet
         logger.info('Salvando dataframe final como parquet!')
 
+        # Salvando dados brutos
+        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'silver')
+            
         pq.write_to_dataset(
             table = pa.Table.from_pandas(df_final),
-            root_path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'bronze'),
-            partition_cols = ['ano','mes','dia'],
+            root_path = path,
             existing_data_behavior = 'delete_matching',
+            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_argenprop_'+ '{i}.parquet',
             use_legacy_dataset = False
         )
 
@@ -590,7 +588,7 @@ class ScraperZonaProp:
     _local: list = None
 
 
-    @st.cache_data(ttl = 86400, max_entries = 100)
+    # @st.cache_data(ttl = 86400, max_entries = 100)
     def extract_pages(self, url):
         '''
             * Retorna o total de imóveis do tipo passado
@@ -639,7 +637,7 @@ class ScraperZonaProp:
             'dia': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).day)
         }
 
-    @st.cache_data(ttl = 86400, max_entries = 100)
+    # @st.cache_data(ttl = 86400, max_entries = 100)
     def get_pages(self):
         '''
             * Recebe os tipos de imóveis e os locais e obtém o total de páginas puxando a função extract_pages usando threads
@@ -664,9 +662,23 @@ class ScraperZonaProp:
                 except Exception as exc:
                     continue
         
-        return pd.DataFrame(dados).sort_values('imoveis', ascending = False).reset_index(drop=True)
+        df = pd.DataFrame(dados).sort_values('imoveis', ascending = False).reset_index(drop=True)
 
-    @st.cache_data(ttl = 86400, max_entries = 100)
+        # Salvando os dados de página
+        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'paginas')
+        
+        pq.write_to_dataset(
+            table = pa.Table.from_pandas(df),
+            root_path = path,
+            existing_data_behavior = 'delete_matching',
+            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_paginas_zonaprop_'+ '{i}.parquet',
+            use_legacy_dataset = False
+        )
+
+        # Retornando df 
+        return df
+
+    # @st.cache_data(ttl = 86400, max_entries = 100)
     def get_all_pages(self):
         '''
             * Retorna o código fonte de todas as páginas com base nos critérios selecionados
@@ -698,7 +710,7 @@ class ScraperZonaProp:
         
         return dados
 
-    @st.cache_data(ttl = 86400, max_entries = 100)
+    # @st.cache_data(ttl = 86400, max_entries = 100)
     def get_property_data(self):
         '''
             Com base nos códigos html de cada página, extrai os dados dos imóveis
@@ -960,9 +972,20 @@ class ScraperZonaProp:
             .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
 
+        # Salvando dados iniciais
+        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze')
+            
+        pq.write_to_dataset(
+            table = pa.Table.from_pandas(df),
+            root_path = path,
+            existing_data_behavior = 'delete_matching',
+            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_zonaprop_'+ '{i}.parquet',
+            use_legacy_dataset = False
+        )
+
         return df
 
-    @st.cache_data(ttl = 86400, max_entries = 100)
+    # @st.cache_data(ttl = 86400, max_entries = 100)
     def get_final_dataframe(self):
 
         # Dataframe com dados dos imóveis
@@ -1032,11 +1055,14 @@ class ScraperZonaProp:
         )
 
         # Salvando como parquet
+        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver')
+            
         pq.write_to_dataset(
-            table = pa.Table.from_pandas(df_final),
-            root_path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'bronze'),
-            partition_cols = ['ano','mes','dia'],
+            table = pa.Table.from_pandas(df),
+            root_path = path,
             existing_data_behavior = 'delete_matching',
+            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_zonaprop_'+ '{i}.parquet',
             use_legacy_dataset = False
         )
+
         return df_final
