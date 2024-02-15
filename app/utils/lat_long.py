@@ -136,9 +136,11 @@ def apply_geocoding(row, max_tentativas: int = 3):
         - row: linha de um dataframe retornada durante uma iteração
         - max_tentativas: máximo de tentativas caso a requisição falhe ou veja nula
     '''
-    time.sleep(1)
+    
+    # time.sleep(1)
+    counter = 0
 
-    for tentativa in range(1, max_tentativas + 1):
+    for _ in range(1, max_tentativas + 1):
         # Resultado de longitude e latitude
         result = get_geocoding(
             endereco = row['endereco'],
@@ -155,6 +157,9 @@ def apply_geocoding(row, max_tentativas: int = 3):
             }
 
             return resultado
+        
+        counter += 1
+        time.sleep(counter)
 
     resultado = {
                 'id': row['id'],
