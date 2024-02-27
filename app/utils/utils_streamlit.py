@@ -299,26 +299,26 @@ def get_zonaprop():
     check_page_zonaprop = ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_files()
     check_bronze_zonaprop = ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).check_files()
 
-    # Checando os tipos de imóveis nao disponíveis
-    check_tipo_bronze = ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).types_intersection()
-
     # Caso não exista arquivo na página bronze, carrega tudo
     if check_bronze_zonaprop == 0:
-        df_zonaprop = ScraperZonaProp(_tipo = st.session_state.tipos, _local = st.session_state.locais).get_final_dataframe()
+        df_zonaprop = ScraperZonaProp(
+                _tipo = [
+                    'casas','departamentos','ph','locales-comerciales','oficinas-comerciales','bodegas-galpones','cocheras','depositos','terrenos',
+                    'edificios','quintas-vacacionales','campos','fondos-de-comercio','hoteles', 'consultorios','cama-nautica','bovedas-nichos-y-parcelas'
+                ], 
+                _local = st.session_state.locais
+            ).get_final_dataframe()
 
-    # Caso exista arquivo, e alguns dos tipos nao esteja disponivel, carrega apenas os tipos faltantes
-    elif check_bronze_zonaprop > 0 and len(check_tipo_bronze) > 0:
-        df_zonaprop = ScraperZonaProp(_tipo = check_tipo_bronze, _local = st.session_state.locais).get_final_dataframe()
-        df_zonaprop = pd.read_parquet(
-            path = get_paths()['silver_zonaprop'],
-            filters = [('cidade', 'in', st.session_state.locais)]
-        )
+        df_zonaprop.loc[df_zonaprop.tipo_imovel.isin(st.session_state.tipos)]
 
-    elif check_bronze_zonaprop > 0 and len(check_tipo_bronze) == 0:
+    else:
         df_zonaprop = pd.read_parquet(
-            path = get_paths()['silver_zonaprop'],
-            filters = [('cidade', 'in', st.session_state.locais)]
-        )
+                path = get_paths()['silver_zonaprop'],
+                filters = [
+                    ('cidade', 'in', st.session_state.locais),
+                    ('tipo_imovel', 'in', st.session_state.tipos)
+                ]
+            )
     
     return df_zonaprop
     
@@ -338,36 +338,34 @@ def get_argenprop():
     check_page_argenprop = ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_files()
     check_bronze_argenprop = ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).check_files()
 
-    # Checando os tipos de imóveis nao disponíveis
-    check_tipo_bronze = ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).types_intersection()
-
     # Caso não exista arquivo na página bronze, carrega tudo
     if check_bronze_argenprop == 0:
-        df_zonaprop = ScraperZonaProp(_tipo = st.session_state.tipos, _local = st.session_state.locais).get_final_dataframe()
+        df_argenprop = asyncio.run(
+            ScraperArgenProp(
+                _tipo = ['departamentos','casas','campos','cocheras','fondos-de-comercio','galpones','hoteles','locales','negocios-especiales','oficinas','ph','quintas','terrenos'], 
+                _local = st.session_state.locais
+            ).get_final_dataframe()
+        )
 
-    # Caso exista arquivo, e alguns dos tipos nao esteja disponivel, carrega apenas os tipos faltantes
-    elif check_bronze_argenprop > 0 and len(check_tipo_bronze) > 0:
-        df_argenprop = asyncio.run(ScraperArgenProp(st.session_state.tipos, st.session_state.locais).get_final_dataframe())
+        df_argenprop.loc[df_argenprop.tipo_imovel.isin(st.session_state.tipos)]
+
+    else:
         df_argenprop = pd.read_parquet(
-            path = get_paths()['silver_argenprop'],
-            filters = [('cidade', 'in', st.session_state.locais)]
-        )
-        
-    elif check_bronze_argenprop > 0 and len(check_tipo_bronze) == 0:
-        df_argenprop = pd.read_parquet(
-            path = get_paths()['silver_argenprop'],
-            filters = [('cidade', 'in', st.session_state.locais)]
-        )
+                path = get_paths()['silver_argenprop'],
+                filters = [
+                    ('cidade', 'in', st.session_state.locais),
+                    ('tipo_imovel', 'in', st.session_state.tipos)
+                ]
+            )
     
     return df_argenprop
 
 def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame = None):
 
-
     # DADOS
     if ('Argenprop' in st.session_state.base_busca) and ('Zonaprop' in st.session_state.base_busca):
-        df_argenprop = asyncio.run(ScraperArgenProp(st.session_state.tipos, st.session_state.locais).get_final_dataframe())
-        df_zonaprop = ScraperZonaProp(_tipo = st.session_state.tipos, _local = st.session_state.locais).get_final_dataframe()
+        df_zonaprop = get_zonaprop()
+        df_argenprop = get_argenprop()
 
         df_final = (
             pd.concat(
@@ -404,7 +402,7 @@ def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame =
         )
 
     elif 'Argenprop' in st.session_state.base_busca:
-        df_argenprop = asyncio.run(ScraperArgenProp(st.session_state.tipos, st.session_state.locais).get_final_dataframe())
+        df_argenprop = get_argenprop()
         
         df_final = (
             df_argenprop
@@ -435,7 +433,7 @@ def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame =
         )
 
     elif 'Zonaprop' in st.session_state.base_busca:
-        df_zonaprop = ScraperZonaProp(_tipo = st.session_state.tipos, _local = st.session_state.locais).get_final_dataframe()
+        df_zonaprop = get_zonaprop()
         
         df_final = (
             df_zonaprop

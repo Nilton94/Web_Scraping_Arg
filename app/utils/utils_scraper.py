@@ -52,7 +52,7 @@ class ScraperArgenProp:
 
                 html_source = await response.text()
                 return {
-                    'local': re.compile(r'\.com/(.*?)/alquiler/(.*?)\?').search(url).group(2),
+                    'cidade': re.compile(r'\.com/(.*?)/alquiler/(.*?)\?').search(url).group(2),
                     'tipo_imovel': re.compile(r'\.com/(.*?)/alquiler/(.*?)\?').search(url).group(1),
                     'imoveis': float(re.sub('[^0-9]','',BeautifulSoup(html_source, 'html.parser').find('p','listing-header__results').text)) if BeautifulSoup(html_source, 'html.parser').find('p','listing-header__results') != None else 0.0,
                     'base': re.search(r'www\.(.*?)\.com', url).group(1),
@@ -82,7 +82,8 @@ class ScraperArgenProp:
             # HTML
             urls = [
                     f'https://www.argenprop.com/{tipo}/alquiler/{local}?pagina-1' 
-                    for tipo in self._tipo 
+                    # for tipo in self._tipo 
+                    for tipo in ['departamentos','casas','campos','cocheras','fondos-de-comercio','galpones','hoteles','locales','negocios-especiales','oficinas','ph','quintas','terrenos']
                     for local in self._local
                 ]
 
@@ -111,7 +112,7 @@ class ScraperArgenProp:
                 table = pa.Table.from_pandas(page_df),
                 root_path = path,
                 existing_data_behavior = 'delete_matching',
-                basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_paginas_argenprop_'+ '{i}.parquet',
+                basename_template = f"{datetime.datetime.now(tz=pytz.timezone('America/Sao_Paulo')).date()}_paginas_argenprop_"+"{i}.parquet",
                 use_legacy_dataset = False
             )
 
@@ -143,7 +144,7 @@ class ScraperArgenProp:
                 f'https://www.argenprop.com/{tipo}/alquiler/{local}?pagina-{pagina}' 
                 for tipo in self._tipo 
                 for local in self._local 
-                for max_pages in [int(page_df[(page_df['tipo_imovel'] == tipo) & (page_df['local'] == local)]['paginas'].max())]
+                for max_pages in [int(page_df[(page_df['tipo_imovel'] == tipo) & (page_df['cidade'] == local)]['paginas'].max())]
                 for pagina in range(1, max_pages + 1)
             ]
 
@@ -167,10 +168,10 @@ class ScraperArgenProp:
             - Tratamento dos dados de imóveis das códigos das páginas retornadas no método get_all_pages()
         '''
 
-        logger.info('Obtendo lista de htmls para extrair dados de imóveis!')
-
         # Lista de htmls
         html = await self.get_all_pages()
+
+        logger.info('Obtendo lista de htmls para extrair dados de imóveis!')
 
         # Lista que guardará os dados dos imóveis
         dados = []
@@ -179,246 +180,249 @@ class ScraperArgenProp:
 
         # Iterando sobre os códigos das páginas e extraindo os dados dos imóveis
         for x in html:
-            try:
-                soup = BeautifulSoup(x['html'], 'html.parser')
-
-                res = soup.find('div', {"class":"listing__items"})
-
-                # ESTADO
+            if x['imoveis'] > 0.0:
                 try:
-                    estado = get_state(cidade = x['local'])
-                except:
-                    estado = 'Sem info'
-                
-                # Dados do dicionário
-                cidade, tipo_imo, base = x['local'], x['tipo_imovel'], x['base']
+                    soup = BeautifulSoup(x['html'], 'html.parser')
 
-                # Datas
-                data, ano, mes, dia = x['data'], x['ano'], x['mes'], x['dia']
+                    res = soup.find('div', {"class":"listing__items"})
 
-                for i in res:
+                    # ESTADO
+                    try:
+                        estado = get_state(cidade = x['cidade'])
+                    except:
+                        estado = 'Sem info'
                     
-                    # ID DO IMOVEL - OK
-                    try:
-                        id = i.find('a').get('data-item-card')
-                    except:
-                        id = 'Sem info'
+                    # Dados do dicionário
+                    cidade, tipo_imo, base = x['cidade'], x['tipo_imovel'], x['base']
 
-                    # URL - OK
-                    try:
-                        url = 'https://www.argenprop.com' + i.find('a').get('href')
-                    except:
-                        url = 'Sem info'
+                    # Datas
+                    data, ano, mes, dia = x['data'], x['ano'], x['mes'], x['dia']
 
-                    # NUMERO DE FOTOS - OK
-                    try:
-                        num_fotos = int(re.search(r'(?<=/)\d+', i.find('div','counter-box').text).group(0))
-                    except:
-                        num_fotos = 0.0
+                    for i in res:
+                        
+                        # ID DO IMOVEL - OK
+                        try:
+                            id = i.find('a').get('data-item-card')
+                        except:
+                            id = 'Sem info'
 
-                    # ENDERECO - OK
-                    try:
-                        endereco = (i.find('p', 'card__address').text).strip().lower().replace(' al', '')
-                    except:
-                        endereco = 'Sem info'
+                        # URL - OK
+                        try:
+                            url = 'https://www.argenprop.com' + i.find('a').get('href')
+                        except:
+                            url = 'Sem info'
 
-                    # BAIRRO - OK
-                    try:
-                        bairro = re.match(r'^([^,]+)', (i.find('p','card__title--primary show-mobile').text).strip()).group(0)
-                        # bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
-                    except:
-                        bairro = 'Sem info'
+                        # NUMERO DE FOTOS - OK
+                        try:
+                            num_fotos = int(re.search(r'(?<=/)\d+', i.find('div','counter-box').text).group(0))
+                        except:
+                            num_fotos = 0.0
 
-                    # ALUGUEL - MOEDA
-                    try:
-                        aluguel_moeda = i.find('span','card__currency').text
-                        aluguel_moeda = 'Sem info' if 'consultar' in aluguel_moeda.lower() else aluguel_moeda
-                    except:
-                        aluguel_moeda = 'Sem info'
-                    
-                    # ALUGUEL - VALOR
-                    try:
-                        aluguel = float(re.sub(r'[^0-9]', '', i.find('span','card__currency').next_sibling.strip()))
-                    except:
-                        aluguel = 0.0
+                        # ENDERECO - OK
+                        try:
+                            endereco = (i.find('p', 'card__address').text).strip().lower().replace(' al', '')
+                        except:
+                            endereco = 'Sem info'
 
-                    # EXPENSAS MOEDAS
-                    try:
-                        expensas_moeda = re.findall(r'\$', i.find('span','card__expenses').text.strip())[0]
-                    except:
-                        expensas_moeda = 'Sem info'
+                        # BAIRRO - OK
+                        try:
+                            bairro = re.match(r'^([^,]+)', (i.find('p','card__title--primary show-mobile').text).strip()).group(0)
+                            # bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
+                        except:
+                            bairro = 'Sem info'
 
-                    # EXPENSAS
-                    try:
-                        expensas = float(re.sub(r'[^0-9]', '', i.find('span','card__expenses').text.strip()))
-                    except:
-                        expensas = 0.0
+                        # ALUGUEL - MOEDA
+                        try:
+                            aluguel_moeda = i.find('span','card__currency').text
+                            aluguel_moeda = 'Sem info' if 'consultar' in aluguel_moeda.lower() else aluguel_moeda
+                        except:
+                            aluguel_moeda = 'Sem info'
+                        
+                        # ALUGUEL - VALOR
+                        try:
+                            aluguel = float(re.sub(r'[^0-9]', '', i.find('span','card__currency').next_sibling.strip()))
+                        except:
+                            aluguel = 0.0
 
-                    # VALOR TOTAL (ALUGUEL + EXPENSAS)
-                    if aluguel_moeda == expensas_moeda:
-                        valor_total_aluguel = (aluguel + expensas)
-                    elif aluguel_moeda != expensas_moeda and aluguel_moeda == 'USD':
-                        valor_total_aluguel = (aluguel + expensas/1000)
-                    elif aluguel_moeda != expensas_moeda and aluguel_moeda == '$':
-                        valor_total_aluguel = (aluguel + expensas*1000)
-                    else:
-                        valor_total_aluguel = 0.0
+                        # EXPENSAS MOEDAS
+                        try:
+                            expensas_moeda = re.findall(r'\$', i.find('span','card__expenses').text.strip())[0]
+                        except:
+                            expensas_moeda = 'Sem info'
 
-                    # IMOBILIARIA
-                    try:
-                        imobiliaria = i.find('div', 'card__agent').find('img').get('alt').strip().lower()
-                    except:
-                        imobiliaria = 'Sem info'
+                        # EXPENSAS
+                        try:
+                            expensas = float(re.sub(r'[^0-9]', '', i.find('span','card__expenses').text.strip()))
+                        except:
+                            expensas = 0.0
 
-                    # FOTOS
-                    try:
-                        fotos = [p.find('img').get('data-src') for p in i.find('ul', 'card__photos').find_all('li')]
-                    except:
-                        fotos = ['Sem info']
+                        # VALOR TOTAL (ALUGUEL + EXPENSAS)
+                        if aluguel_moeda == expensas_moeda:
+                            valor_total_aluguel = (aluguel + expensas)
+                        elif aluguel_moeda != expensas_moeda and aluguel_moeda == 'USD':
+                            valor_total_aluguel = (aluguel + expensas/1000)
+                        elif aluguel_moeda != expensas_moeda and aluguel_moeda == '$':
+                            valor_total_aluguel = (aluguel + expensas*1000)
+                        else:
+                            valor_total_aluguel = 0.0
 
-                    # CARD POINTS - DEFINE A ORDEM EM QUE OS IMOVEIS APARECEM NO SITE (APARENTEMENTE)
-                    try:
-                        card_points = float(re.sub('[^0-9]','',i.find('p','card__points').text.strip()))
-                    except:
-                        card_points = 0.0
+                        # IMOBILIARIA
+                        try:
+                            imobiliaria = i.find('div', 'card__agent').find('img').get('alt').strip().lower()
+                        except:
+                            imobiliaria = 'Sem info'
 
-                    # DESCRICAO
-                    try:
-                        descricao = i.find('p', 'card__info').text.strip()
-                    except:
-                        descricao = 'Sem info'
-                    
-                    # TITULO
-                    try:
-                        titulo = i.find('h2', 'card__title').text.strip()
-                    except:
-                        titulo = 'Sem info'
+                        # FOTOS
+                        try:
+                            fotos = [p.find('img').get('data-src') for p in i.find('ul', 'card__photos').find_all('li')]
+                        except:
+                            fotos = ['Sem info']
 
-                    # AMENIDADES
-                    try:
-                        # Lista com todas as amenidades para facilitar extração das existentes
-                        amenidades = i.find('ul', 'card__main-features').find_all('li')
-                    except:
-                        amenidades = None
+                        # CARD POINTS - DEFINE A ORDEM EM QUE OS IMOVEIS APARECEM NO SITE (APARENTEMENTE)
+                        try:
+                            card_points = float(re.sub('[^0-9]','',i.find('p','card__points').text.strip()))
+                        except:
+                            card_points = 0.0
 
-                    # AREA
-                    try:
-                        area_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-superficie_cubierta') != None]
-                        area = float(re.match('[0-9]{1,}', amenidades[area_indice[0]].find('span').text.strip()).group(0))
-                    except:
-                        area = 0.0
+                        # DESCRICAO
+                        try:
+                            descricao = i.find('p', 'card__info').text.strip()
+                        except:
+                            descricao = 'Sem info'
+                        
+                        # TITULO
+                        try:
+                            titulo = i.find('h2', 'card__title').text.strip()
+                        except:
+                            titulo = 'Sem info'
 
-                    # ANTIGUIDADE
-                    try:
-                        antiguidade_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-antiguedad') != None]
-                        antiguidade = float(re.match('[0-9]{1,}', amenidades[antiguidade_indice[0]].find('span').text.strip()).group(0)) if 'estrenar' not in amenidades[antiguidade_indice[0]].find('span').text.strip().lower() else 0.0
-                    except:
-                        antiguidade = 0.0
+                        # AMENIDADES
+                        try:
+                            # Lista com todas as amenidades para facilitar extração das existentes
+                            amenidades = i.find('ul', 'card__main-features').find_all('li')
+                        except:
+                            amenidades = None
 
-                    # BANHEIROS
-                    try:
-                        banheiros_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_banos') != None]
-                        banheiros = float(re.match('[0-9]{1,}', amenidades[banheiros_indice[0]].find('span').text.strip()).group(0))
-                    except:
-                        banheiros = 0.0
+                        # AREA
+                        try:
+                            area_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-superficie_cubierta') != None]
+                            area = float(re.match('[0-9]{1,}', amenidades[area_indice[0]].find('span').text.strip()).group(0))
+                        except:
+                            area = 0.0
 
-                    # TIPO BANHEIROS
-                    try:
-                        tipo_banheiro_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-tipo_baño') != None]
-                        tipo_banheiro = amenidades[tipo_banheiro_indice[0]].find('span').text.strip()
-                    except:
-                        tipo_banheiro = 'Sem info'
+                        # ANTIGUIDADE
+                        try:
+                            antiguidade_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-antiguedad') != None]
+                            antiguidade = float(re.match('[0-9]{1,}', amenidades[antiguidade_indice[0]].find('span').text.strip()).group(0)) if 'estrenar' not in amenidades[antiguidade_indice[0]].find('span').text.strip().lower() else 0.0
+                        except:
+                            antiguidade = 0.0
 
-                    # AMBIENTES
-                    try:
-                        ambientes_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_ambientes') != None]
-                        ambientes = amenidades[ambientes_indice[0]].find('span').text.strip()
-                        ambientes = 1.0 if ambientes.lower().__contains__('mono') else float(re.sub('[^0-9]', '', ambientes))
-                    except:
-                        ambientes = 0.0
-                    
-                    # DORMITORIOS
-                    try:
-                        dormitorios_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_dormitorios') != None]
-                        dormitorios = 1.0 if 'mono' in amenidades[dormitorios_indice[0]].find('span').text.lower().strip() else float(re.match('[0-9]{1,}', amenidades[dormitorios_indice[0]].find('span').text.strip()).group(0))
-                    except:
-                        dormitorios = 0.0
+                        # BANHEIROS
+                        try:
+                            banheiros_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_banos') != None]
+                            banheiros = float(re.match('[0-9]{1,}', amenidades[banheiros_indice[0]].find('span').text.strip()).group(0))
+                        except:
+                            banheiros = 0.0
 
-                    # ORIENTACAO
-                    try:
-                        orientacao_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-orientacion') != None]
-                        orientacao = amenidades[orientacao_indice[0]].find('span').text.strip()
-                    except:
-                        orientacao = 'Sem info'
+                        # TIPO BANHEIROS
+                        try:
+                            tipo_banheiro_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-tipo_baño') != None]
+                            tipo_banheiro = amenidades[tipo_banheiro_indice[0]].find('span').text.strip()
+                        except:
+                            tipo_banheiro = 'Sem info'
 
-                    # GARAGENS
-                    try:
-                        garagens_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-ambiente_cochera') != None]
-                        garagens = float(re.match('[0-9]{1,}', amenidades[garagens_indice[0]].find('span').text.strip()).group(0))
-                    except:
-                        garagens = 0.0
-                    
-                    # ESTADO PROPRIEDADE
-                    try:
-                        estado_prop_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-estado_propiedad') != None]
-                        estado_prop = amenidades[estado_prop_indice[0]].find('span').text.strip()
-                    except:
-                        estado_prop = 'Sem info'
-                    
-                    # TIPO DE LOCAL
-                    try:
-                        tipo_local_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-tipo_local') != None]
-                        tipo_local = amenidades[tipo_local_indice[0]].find('span').text.strip()
-                    except:
-                        tipo_local = 'Sem info'
+                        # AMBIENTES
+                        try:
+                            ambientes_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_ambientes') != None]
+                            ambientes = amenidades[ambientes_indice[0]].find('span').text.strip()
+                            ambientes = 1.0 if ambientes.lower().__contains__('mono') else float(re.sub('[^0-9]', '', ambientes))
+                        except:
+                            ambientes = 0.0
+                        
+                        # DORMITORIOS
+                        try:
+                            dormitorios_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-cantidad_dormitorios') != None]
+                            dormitorios = 1.0 if 'mono' in amenidades[dormitorios_indice[0]].find('span').text.lower().strip() else float(re.match('[0-9]{1,}', amenidades[dormitorios_indice[0]].find('span').text.strip()).group(0))
+                        except:
+                            dormitorios = 0.0
 
-                    # WHATSAPP
-                    try:
-                        wsp = re.findall(r'https://wa\.me/\d+', i.find('div', 'card-contact-group').find('span')['data-href'])[0]
-                    except:
-                        wsp = 'Sem info'
+                        # ORIENTACAO
+                        try:
+                            orientacao_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-orientacion') != None]
+                            orientacao = amenidades[orientacao_indice[0]].find('span').text.strip()
+                        except:
+                            orientacao = 'Sem info'
 
-                    # Adicionando à lista
-                    dados.append(
-                        [
-                            id,
-                            base,
-                            tipo_imo,
-                            estado,
-                            cidade, 
-                            bairro,
-                            endereco,
-                            url, 
-                            descricao,
-                            titulo,
-                            aluguel_moeda,
-                            aluguel,
-                            expensas_moeda,
-                            expensas,
-                            valor_total_aluguel,
-                            area,
-                            antiguidade, 
-                            banheiros,
-                            tipo_banheiro,
-                            ambientes,
-                            dormitorios,
-                            orientacao,
-                            garagens,
-                            estado_prop,
-                            tipo_local, 
-                            imobiliaria, 
-                            num_fotos,
-                            fotos,
-                            card_points,
-                            wsp,
-                            data,
-                            ano,
-                            mes,
-                            dia
-                        ]
-                    )
-            except Exception as e:
-                logger.error(f'Erro na extração dos dados da url {x["url"]}: {e}')
+                        # GARAGENS
+                        try:
+                            garagens_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-ambiente_cochera') != None]
+                            garagens = float(re.match('[0-9]{1,}', amenidades[garagens_indice[0]].find('span').text.strip()).group(0))
+                        except:
+                            garagens = 0.0
+                        
+                        # ESTADO PROPRIEDADE
+                        try:
+                            estado_prop_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-estado_propiedad') != None]
+                            estado_prop = amenidades[estado_prop_indice[0]].find('span').text.strip()
+                        except:
+                            estado_prop = 'Sem info'
+                        
+                        # TIPO DE LOCAL
+                        try:
+                            tipo_local_indice = [i for i, s in enumerate(amenidades) if s.find('i','icono-tipo_local') != None]
+                            tipo_local = amenidades[tipo_local_indice[0]].find('span').text.strip()
+                        except:
+                            tipo_local = 'Sem info'
+
+                        # WHATSAPP
+                        try:
+                            wsp = re.findall(r'https://wa\.me/\d+', i.find('div', 'card-contact-group').find('span')['data-href'])[0]
+                        except:
+                            wsp = 'Sem info'
+
+                        # Adicionando à lista
+                        dados.append(
+                            [
+                                id,
+                                base,
+                                tipo_imo,
+                                estado,
+                                cidade, 
+                                bairro,
+                                endereco,
+                                url, 
+                                descricao,
+                                titulo,
+                                aluguel_moeda,
+                                aluguel,
+                                expensas_moeda,
+                                expensas,
+                                valor_total_aluguel,
+                                area,
+                                antiguidade, 
+                                banheiros,
+                                tipo_banheiro,
+                                ambientes,
+                                dormitorios,
+                                orientacao,
+                                garagens,
+                                estado_prop,
+                                tipo_local, 
+                                imobiliaria, 
+                                num_fotos,
+                                fotos,
+                                card_points,
+                                wsp,
+                                data,
+                                ano,
+                                mes,
+                                dia
+                            ]
+                        )
+                except Exception as e:
+                    logger.error(f'Erro na extração dos dados da url {x["url"]}: {e}')
+                    continue
+            else:
                 continue
         
         logger.info('Iteração finalizada. Guardando os dados em um Dataframe!')
@@ -477,7 +481,7 @@ class ScraperArgenProp:
             table = pa.Table.from_pandas(df),
             root_path = path,
             existing_data_behavior = 'delete_matching',
-            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_argenprop_'+ '{i}.parquet',
+            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_argenprop_"+"{i}.parquet",
             use_legacy_dataset = False
         )
 
@@ -517,7 +521,7 @@ class ScraperArgenProp:
             pd.merge(
                 left = df,
                 right = pd.DataFrame(res),
-                how = 'left',
+                how = 'inner',
                 on = 'id'
             )
             .assign(coordenadas = lambda df: df[['latitude','longitude']].values.tolist())
@@ -572,7 +576,7 @@ class ScraperArgenProp:
             table = pa.Table.from_pandas(df_final),
             root_path = path,
             existing_data_behavior = 'delete_matching',
-            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_argenprop_'+ '{i}.parquet',
+            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_argenprop_" + "{i}.parquet",
             use_legacy_dataset = False
         )
 
@@ -618,16 +622,17 @@ class ScraperZonaProp:
             tipo_imovel = 'Sem info'
 
         try:
-            imoveis = float(re.sub(r'[^0-9]', '', BeautifulSoup(source_code, 'html.parser').find('h1','sc-1oqs0ed-0 idmkkS').text))
+            imoveis = float(re.sub(r'[^0-9]', '', BeautifulSoup(source_code, 'html.parser').find('h1','sc-1oqs0ed-0 cvTPma').text))
+            # Tag h1 mudada em 20/02/24 de sc-1oqs0ed-0 idmkkS para sc-1oqs0ed-0 cvTPma
         except:
             imoveis = 0.0
 
         
         return {
-            'local':local,
+            'cidade': local,
             'base': re.search(r'www\.(.*)\.com\.ar/(.*?)-alquiler-(.*?)(-pagina.*|).html', url).group(1),
             'tipo_imovel':tipo_imovel,
-            'imoveis':imoveis,
+            'imoveis': imoveis,
             'paginas': (imoveis//20 + 1) if imoveis > 0 else 0.0,
             'url':url,
             'html': source_code,
@@ -671,7 +676,7 @@ class ScraperZonaProp:
             table = pa.Table.from_pandas(df),
             root_path = path,
             existing_data_behavior = 'delete_matching',
-            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_paginas_zonaprop_'+ '{i}.parquet',
+            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_paginas_zonaprop_" + "{i}.parquet",
             use_legacy_dataset = False
         )
 
@@ -692,7 +697,7 @@ class ScraperZonaProp:
                 f'https://www.zonaprop.com.ar/{tipo}-alquiler-{local}-pagina-{pagina}.html' 
                 for tipo in self._tipo 
                 for local in self._local 
-                for max_pages in [int(page_df[(page_df['tipo_imovel'] == tipo) & (page_df['local'] == local)]['paginas'].max())]
+                for max_pages in [int(page_df[(page_df['tipo_imovel'] == tipo) & (page_df['cidade'] == local)]['paginas'].max())]
                 for pagina in range(1, max_pages + 1)
         ]
 
@@ -719,6 +724,7 @@ class ScraperZonaProp:
         # dados das páginas
         x = self.get_all_pages()
 
+        # if len(x) > 0:
         # Dados dos imóveis
         dados = []
 
@@ -730,7 +736,7 @@ class ScraperZonaProp:
                 divs = soup.find('div','postings-container').find_all('div')
 
                 # Dados gerais do link
-                cidade, tipo_imovel, base = i['local'], i['tipo_imovel'], i['base']
+                cidade, tipo_imovel, base = i['cidade'], i['tipo_imovel'], i['base']
 
                 # ESTADO
                 try:
@@ -808,68 +814,82 @@ class ScraperZonaProp:
                     
                     # ENDERECO
                     try:
-                        endereco = i.find('div', 'sc-ge2uzh-0 eXwAuU').text.strip()
+                        # endereco = i.find('div', 'sc-ge2uzh-0 eXwAuU').text.strip()
+                        endereco = i.find('div', 'sc-ge2uzh-0 eWOwnE postingAddress').text.strip()
                     except:
                         endereco = 'Sem info'
 
                     # BAIRRO
                     try:
-                        bairro = re.match(r'^([^,]+)', (i.find('div', {'data-qa': "POSTING_CARD_LOCATION"}).text.strip()).strip()).group(0).strip()
+                        bairro = re.match(r'^([^,]+)', (i.find('h2', {'data-qa': "POSTING_CARD_LOCATION"}).text.strip()).strip()).group(0).strip()
                         # bairro = unidecode.unidecode(str(re.sub(' +', ' ', bairro.strip())).lower())
                     except:
                         bairro = 'Sem info'
                     
                     # DESTAQUE
                     try:
-                        destaque = i.find('span', 'sc-ryls1p-0 bzIPYI').text.strip()
+                        # destaque = i.find('span', 'sc-ryls1p-0 bzIPYI').text.strip()
+                        destaque = i.find('div', 'sc-i1odl-10 goAqQX').text.strip()
                     except:
                         destaque = 'Sem info'
                     
                     # LISTA AMENIDADES
                     try:
-                        amenidades = i.find('div', {'data-qa': "POSTING_CARD_FEATURES"}).find_all('span')
+                        # amenidades = i.find('div', {'data-qa': "POSTING_CARD_FEATURES"}).find_all('span')
+                        amenidades = i.find('h3', {'data-qa': "POSTING_CARD_FEATURES"}).find_all('span')
                     except:
                         amenidades = []
 
                     # AREA TOTAL
                     try:
-                        area_total = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eLhfrW') != None][0]
+                        # area_total = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eLhfrW') != None][0]
+                        area_total = [float(re.match('[0-9]{1,}', amenidades[i].text.strip()).group(0)) for i, s in enumerate(amenidades) if s.text.__contains__('m²')][0]
                     except:
                         area_total = 0.0
 
-                    # AREA UTIL (cubierta)
-                    try:
-                        area_util = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 dRoEma') != None][0]
-                    except:
-                        area_util = 0.0
+                    # # AREA UTIL (cubierta)
+                    # try:
+                    #     area_util = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 dRoEma') != None][0]
+                    # except:
+                    #     area_util = 0.0
+                    area_util = area_total
 
                     # AMBIENTES
                     try:
                         # ambientes = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 jkEBRn') != None][0]
+                        # ambientes = [
+                        #     1.0 if 'mono' in amenidades[i].find('span').text.lower().strip()
+                        #     else float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) 
+                        #     for i, s in enumerate(amenidades) 
+                        #     if s.find('img','sc-1uhtbxc-1 jkEBRn') != None
+                        # ][0]
                         ambientes = [
-                            1.0 if 'mono' in amenidades[i].find('span').text.lower().strip()
-                            else float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) 
+                            1.0 if 'mono' in amenidades[i].text.lower().strip()
+                            else float(re.match('[0-9]{1,}', amenidades[i].text.strip()).group(0)) 
                             for i, s in enumerate(amenidades) 
-                            if s.find('img','sc-1uhtbxc-1 jkEBRn') != None
+                            if s.text.__contains__('amb')
                         ][0]
                     except:
                         ambientes = 0.0
 
                     # DORMITORIOS
                     try:
-                        dormitorios = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 ljuqxM') != None][0]
+                        # dormitorios = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 ljuqxM') != None][0]
+                        dormitorios = [float(re.match('[0-9]{1,}', amenidades[i].text.strip()).group(0)) for i, s in enumerate(amenidades) if s.text.__contains__('dorm')][0]
                     except:
                         dormitorios = 0.0
 
                     # BANHEIROS
                     try:
-                        banheiros = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 foetjI') != None][0]
+                        # banheiros = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 foetjI') != None][0]
+                        banheiros = [float(re.match('[0-9]{1,}', amenidades[i].text.strip()).group(0)) for i, s in enumerate(amenidades) if s.text.__contains__('baño')][0]
                     except:
                         banheiros = 0.0
                     
                     # GARAGENS
                     try:
-                        garagens = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eykaou') != None][0]
+                        # garagens = [float(re.match('[0-9]{1,}', amenidades[i].find('span').text.strip()).group(0)) for i, s in enumerate(amenidades) if s.find('img','sc-1uhtbxc-1 eykaou') != None][0]
+                        garagens = [float(re.match('[0-9]{1,}', amenidades[i].text.strip()).group(0)) for i, s in enumerate(amenidades) if s.text.__contains__('coch')][0]
                     except:
                         garagens = 0.0
 
@@ -881,7 +901,8 @@ class ScraperZonaProp:
 
                     # DESCRICAO
                     try:
-                        descricao = i.find('div', {'data-qa': "POSTING_CARD_DESCRIPTION"}).text.strip()
+                        # descricao = i.find('div', {'data-qa': "POSTING_CARD_DESCRIPTION"}).text.strip()
+                        descricao = i.find('h3', {'data-qa': "POSTING_CARD_DESCRIPTION"}).text.strip()
                     except:
                         descricao = 'Sem info'
 
@@ -979,11 +1000,13 @@ class ScraperZonaProp:
             table = pa.Table.from_pandas(df),
             root_path = path,
             existing_data_behavior = 'delete_matching',
-            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_zonaprop_'+ '{i}.parquet',
+            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_zonaprop_" + "{i}.parquet",
             use_legacy_dataset = False
         )
 
         return df
+        # else:
+        #     return None
 
     # @st.cache_data(ttl = 86400, max_entries = 100)
     def get_final_dataframe(self):
@@ -1011,7 +1034,7 @@ class ScraperZonaProp:
             pd.merge(
                 left = df,
                 right = pd.DataFrame(res),
-                how = 'left',
+                how = 'inner',
                 on = 'id'
             )
             .assign(coordenadas = lambda df: df[['latitude','longitude']].values.tolist())
@@ -1058,10 +1081,10 @@ class ScraperZonaProp:
         path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver')
             
         pq.write_to_dataset(
-            table = pa.Table.from_pandas(df),
+            table = pa.Table.from_pandas(df_final),
             root_path = path,
             existing_data_behavior = 'delete_matching',
-            basename_template = f'{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_zonaprop_'+ '{i}.parquet',
+            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_zonaprop_" + '{i}.parquet',
             use_legacy_dataset = False
         )
 

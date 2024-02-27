@@ -1,5 +1,5 @@
 import streamlit as st 
-# from utils.utils_scraper import ScraperArgenProp, ScraperZonaProp
+from utils.utils_scraper import ScraperArgenProp, ScraperZonaProp
 from utils.utils_streamlit import get_widgets, get_dataframe, get_map, get_email_widgets, send_mail
 import pygwalker as pyg
 import streamlit.components.v1 as components
@@ -42,11 +42,26 @@ try:
             )
         with col2:
             st.markdown('### Resumo')
-            st.metric(label = 'Imóveis', value = df_final.id.nunique())
-            st.metric(label = 'Média Aluguel ($)', value = df_final.loc[df_final['aluguel_moeda'] == '$', 'aluguel_valor'].mean().round(1))
-            st.metric(label = 'Média Expensas ($)', value = df_final.loc[df_final['expensas_moeda'] == '$', 'expensas_valor'].mean().round(1))
-            st.metric(label = 'Média Ambientes', value = df_final.loc[df_final.ambientes != 0.0, 'ambientes'].mean().round(1))
-            st.metric(label = 'Média Dormitórios', value = df_final.loc[df_final.dormitorios != 0.0, 'dormitorios'].mean().round(1))
+            try:
+                st.metric(label = 'Imóveis', value = df_final.id.nunique())
+            except:
+                st.metric(label = 'Imóveis', value = '-')
+            try:
+                st.metric(label = 'Média Aluguel ($)', value = df_final.loc[df_final['aluguel_moeda'] == '$', 'aluguel_valor'].mean().round(1))
+            except:
+                st.metric(label = 'Média Aluguel ($)', value = '-')
+            try:
+                st.metric(label = 'Média Expensas ($)', value = df_final.loc[df_final['expensas_moeda'] == '$', 'expensas_valor'].mean().round(1))
+            except:
+                st.metric(label = 'Média Expensas ($)', value = '-')
+            try:
+                st.metric(label = 'Média Ambientes', value = df_final.loc[df_final.ambientes > 0.0, 'ambientes'].mean().round(1))
+            except:
+                st.metric(label = 'Média Ambientes', value = '-')
+            try:
+                st.metric(label = 'Média Dormitórios', value = df_final.loc[df_final.dormitorios != 0.0, 'dormitorios'].mean().round(1))
+            except:
+                st.metric(label = 'Média Dormitórios', value = '-')
 
         st.session_state.map = st_data
 
@@ -129,5 +144,6 @@ try:
             except Exception as e:
                 st.error(f'Erro no envio do e-mail: {e}')
 except Exception as e:
-    st.write('Selecione ao menos um valor nos filtros de Base, Local e Tipo de Imóvel!')
+    # st.write('Selecione ao menos um valor nos filtros de Base, Local e Tipo de Imóvel!')
+    st.write('---')
     # st.write(e)
