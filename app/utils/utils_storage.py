@@ -20,7 +20,7 @@ class ParquetStorage:
         try:
             tipos = pq.read_table(
                 self._path, 
-                filters = [('local', 'in', self._locais)]
+                filters = [('cidade', 'in', self._locais)]
             )['tipo_imovel'].unique().to_pylist()
 
             return tipos
@@ -33,11 +33,14 @@ class ParquetStorage:
             Checa se existe algum arquivo na pasta com a data atual, caso contrário, apaga o arquivo
         '''
 
-        if re.match('(.*?)_paginas_.*', os.listdir(self._path)[0]).group(1) == str(datetime.datetime.now().date()):
-            print('Arquivo já existe!')
-        else:
-            os.remove(os.path.join(self._path, os.listdir(self._path)[0]))
-            print('Arquivo anterior removido!')
+        try:
+            if re.match('(.*?)_(.*)_.*', os.listdir(self._path)[0]).group(1) == str(datetime.datetime.now().date()):
+                print('Arquivo já existe!')
+            else:
+                os.remove(os.path.join(self._path, os.listdir(self._path)[0]))
+                print('Arquivo anterior removido!')
+        except Exception as e:
+            print('Não existe arquivo!')
 
     def check_files(self):
         '''
@@ -52,7 +55,10 @@ class ParquetStorage:
         '''
 
         # Tipos que nao existem na base
-        tipos = [x for x in self._tipos if x not in self.check_types()]
+        if self.check_types() == [] or self.check_types() is None:
+            tipos = []
+        else:
+            tipos = [x for x in self._tipos if x not in self.check_types()]
 
         # Tipos com 1 ou mais imóveis
         try:
@@ -60,25 +66,30 @@ class ParquetStorage:
                 lista_nao_null = (
                     pd.read_parquet(
                         os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'paginas'),
-                        filters = [('local', 'in', self._locais)]
+                        filters = [('cidade', 'in', self._locais)]
                         
                     )
                     .pipe(lambda df: df.loc[df.imoveis > 0])
-                    ['tipo']
+                    ['tipo_imovel']
                     .to_list()
                 )
             else:
                 lista_nao_null = (
                     pd.read_parquet(
                         os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'paginas'),
-                        filters = [('local', 'in', self._locais)]
+                        filters = [('cidade', 'in', self._locais)]
                     )
                     .pipe(lambda df: df.loc[df.imoveis > 0])
-                    ['tipo']
+                    ['tipo_imovel']
                     .to_list()
                 )
         except:
             lista_nao_null = []
 
         # Retorna apenas os tipos de imóveis que não constam na base do dia de hoje e que possuem ao menos um imóvel
-        return [x for x in tipos if x in lista_nao_null]
+        # try:
+        resultado = [x for x in tipos if x in lista_nao_null]
+        # except:
+            # resultado = []
+
+        return resultado
