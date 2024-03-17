@@ -128,7 +128,7 @@ def get_geocoding(endereco: str = '', bairro: str = '', cidade: str = '', estado
         return {'lat': None, 'lon': None}
     
 # Função para aplicar a get_geocoding em um Dataframe
-def apply_geocoding(row, max_tentativas: int = 3):
+def apply_geocoding(row, max_tentativas: int = 1):
     '''
         ### Objetivo:
         - Aplica a função a um dataframe e retorna a latitude e longitude com base no endereço 
