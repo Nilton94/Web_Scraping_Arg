@@ -724,19 +724,18 @@ class ScraperZonaProp:
         # dados das páginas
         x = self.get_all_pages()
 
-        # if len(x) > 0:
         # Dados dos imóveis
         dados = []
 
-        for i in x:
+        for j in x:
 
             try:
                 # PARSE DO HTML
-                soup = BeautifulSoup(i['html'], 'html.parser')
+                soup = BeautifulSoup(j['html'], 'html.parser')
                 divs = soup.find('div','postings-container').find_all('div')
 
                 # Dados gerais do link
-                cidade, tipo_imovel, base = i['cidade'], i['tipo_imovel'], i['base']
+                cidade, tipo_imovel, base = j['cidade'], j['tipo_imovel'], j['base']
 
                 # ESTADO
                 try:
@@ -745,12 +744,13 @@ class ScraperZonaProp:
                     estado = 'Sem info'
 
                 # DATA
-                data = i['data']
-                ano = i['ano']
-                mes = i['mes']
-                dia = i['dia']
+                data = j['data']
+                ano = j['ano']
+                mes = j['mes']
+                dia = j['dia']
 
                 for i in divs:
+                    
                     # ID DO IMÓVEL
                     try:
                         id_imovel = i.find('div', {'data-qa': "posting PROPERTY"}).get('data-id').strip()
@@ -990,10 +990,10 @@ class ScraperZonaProp:
             .pipe(
                 lambda df: df.loc[df.id != 'Sem info'].reset_index(drop = True)
             )
-            .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
+            # .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
 
-        # Salvando dados iniciais
+        # Salvando dados iniciais brutos
         path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze')
             
         pq.write_to_dataset(
@@ -1017,17 +1017,44 @@ class ScraperZonaProp:
         # Obtendo dados de longitude e latitude
         res = []
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers = 10) as executor:
-            # Criando a sequência de tasks que serão submetidas para a thread pool
-            rows = {executor.submit(apply_geocoding, row): row for index, row in df.iterrows()}
+        # Loop para obter todos os dados geográficos dos imóveis
+        while True:
             
-            # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
-            for future in concurrent.futures.as_completed(rows):
-                try:
-                    resultado = future.result()
-                    res.append(resultado)
-                except Exception as exc:
+            # Ids sem latitude e longitude
+            if len(res) == 0:
+                df_i = df
+            else:
+                df_i = (
+                    pd.merge(
+                        left = df,
+                        right = pd.DataFrame(res),
+                        how = 'left',
+                        on = 'id'
+                    )
+                    .pipe(
+                        lambda df: df.loc[df.latitude.isna()]
+                    )
+                )
+
+                if df_i.empty or df_i.id.nunique() / df.id.nunique() < 0.15:
+                    break
+                else:
                     continue
+
+            # Thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
+                # Criando a sequência de tasks que serão submetidas para a thread pool
+                rows = {executor.submit(apply_geocoding, row): row for index, row in df_i.iterrows()}
+                
+                # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
+                for future in concurrent.futures.as_completed(rows):
+                    try:
+                        resultado = future.result()
+                        res.append(resultado)
+                    except Exception as exc:
+                        continue
+
+            print(f'DF Bronze: {df.id.nunique}, DF Sem Lat/Long: {pd.DataFrame(res).id.nunique()}, Tamanho Lista: {len(res)}')
 
         # Juntando dados de latitude e longitude
         df_lat_long = (
@@ -1077,7 +1104,7 @@ class ScraperZonaProp:
             .reset_index(drop = True)
         )
 
-        # Salvando como parquet
+        # Salvando os dados enriquecidos como parquet
         path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver')
             
         pq.write_to_dataset(

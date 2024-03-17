@@ -364,8 +364,8 @@ def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame =
 
     # DADOS
     if ('Argenprop' in st.session_state.base_busca) and ('Zonaprop' in st.session_state.base_busca):
-        df_zonaprop = get_zonaprop()
         df_argenprop = get_argenprop()
+        df_zonaprop = get_zonaprop()
 
         df_final = (
             pd.concat(
@@ -487,15 +487,6 @@ def send_mail(df: pd.DataFrame, emails: str = None):
 
     # Definindo o corpo do email
     corpo_email = textwrap.dedent(
-        # f"""
-        #     <html>
-        #     <head></head>
-        #     <body>
-        #         <p>Olá, </p>
-        #         <p>Confira abaixo a lista com os imóveis selecionados.</p>
-        #     </body>
-        #     </html>
-        # """
         'Olá, confira abaixo a lista com os imóveis selecionados.'
     )
 
