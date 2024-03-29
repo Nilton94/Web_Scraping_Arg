@@ -1,5 +1,4 @@
 import pandas as pd
-# import requests
 from bs4 import BeautifulSoup
 import concurrent.futures
 import pyarrow as pa
@@ -18,8 +17,7 @@ from utils.log_config import get_logger
 from utils.lat_long import apply_geocoding, get_state, get_distance_unr, get_distance_provincial, get_distance_baigorria, get_distance_ninos, get_distance_carrasco
 from geopy.distance import distance
 import streamlit as st
-# from aiocache import cached, Cache
-# from aiocache.serializers import PickleSerializer
+from utils.utils_storage import get_paths, DuckDBtStorage
 import unidecode
 
 # Criando logger
@@ -105,16 +103,23 @@ class ScraperArgenProp:
                 .assign(paginas = lambda x: round(x['imoveis']/20 + 2.0))
             )
 
-            # Salvando os dados de página
-            path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'paginas')
+            # Salvando os dados em um db
+            DuckDBtStorage(
+                _path = get_paths()['argenprop']['imoveis'], 
+                _tabela = 'paginas_argenprop',
+                _df = page_df
+            ).create_table()
             
-            pq.write_to_dataset(
-                table = pa.Table.from_pandas(page_df),
-                root_path = path,
-                existing_data_behavior = 'delete_matching',
-                basename_template = f"{datetime.datetime.now(tz=pytz.timezone('America/Sao_Paulo')).date()}_paginas_argenprop_"+"{i}.parquet",
-                use_legacy_dataset = False
-            )
+            # Salvando os dados de página - Parquet
+            # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'paginas')
+            
+            # pq.write_to_dataset(
+            #     table = pa.Table.from_pandas(page_df),
+            #     root_path = path,
+            #     existing_data_behavior = 'delete_matching',
+            #     basename_template = f"{datetime.datetime.now(tz=pytz.timezone('America/Sao_Paulo')).date()}_paginas_argenprop_"+"{i}.parquet",
+            #     use_legacy_dataset = False
+            # )
 
             # Retornando df 
             return page_df
@@ -474,16 +479,19 @@ class ScraperArgenProp:
             .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
         
+        logger.info(f'Saldos dados Argenprop na pasta bronze')
+
         # Salvando dados iniciais
-        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze')
+
+        # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze')
             
-        pq.write_to_dataset(
-            table = pa.Table.from_pandas(df),
-            root_path = path,
-            existing_data_behavior = 'delete_matching',
-            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_argenprop_"+"{i}.parquet",
-            use_legacy_dataset = False
-        )
+        # pq.write_to_dataset(
+        #     table = pa.Table.from_pandas(df),
+        #     root_path = path,
+        #     existing_data_behavior = 'delete_matching',
+        #     basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_argenprop_"+"{i}.parquet",
+        #     use_legacy_dataset = False
+        # )
 
         # Retornando df
         return df
@@ -504,17 +512,42 @@ class ScraperArgenProp:
 
         res = []
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers = 10) as executor:
-            # Criando a sequência de tasks que serão submetidas para a thread pool
-            rows = {executor.submit(apply_geocoding, row): row for index, row in df.iterrows()}
+        while True:
             
-            # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
-            for future in concurrent.futures.as_completed(rows):
-                try:
-                    resultado = future.result()
-                    res.append(resultado)
-                except Exception as exc:
+            # Ids sem latitude e longitude
+            if len(res) == 0:
+                df_i = df
+            else:
+                df_i = (
+                    pd.merge(
+                        left = df,
+                        right = pd.DataFrame(res),
+                        how = 'left',
+                        on = 'id'
+                    )
+                    .pipe(
+                        lambda df: df.loc[df.latitude.isna()]
+                    )
+                )
+
+                if df_i.empty or (df_i.id.nunique() / df.id.nunique() < 0.10):
+                    break
+                else:
                     continue
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
+                # Criando a sequência de tasks que serão submetidas para a thread pool
+                rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for index, row in df_i.iterrows()}
+                
+                # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
+                for future in concurrent.futures.as_completed(rows):
+                    try:
+                        resultado = future.result()
+                        res.append(resultado)
+                    except Exception as exc:
+                        continue
+
+        logger.info(f'Obtenção de dados geográficos finalizados!')
 
         # Juntando dados de latitude e longitude
         df_lat_long = (
@@ -567,7 +600,7 @@ class ScraperArgenProp:
         )
 
         # Salvando como parquet
-        logger.info('Salvando dataframe final como parquet!')
+        logger.info('Salvando dataframe final Argenprop Silver como parquet!')
 
         # Salvando dados brutos
         path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'silver')
@@ -726,6 +759,8 @@ class ScraperZonaProp:
 
         # Dados dos imóveis
         dados = []
+
+        logger.info('Iniciando iteração sobre o hmtl das páginas')
 
         for j in x:
 
@@ -953,6 +988,8 @@ class ScraperZonaProp:
             except:
                 continue
 
+        logger.info('Obtendo dataframe da pasta bronze do Zonaprop')
+
         df = (
             pd.DataFrame(
                 dados,
@@ -1017,6 +1054,8 @@ class ScraperZonaProp:
         # Obtendo dados de longitude e latitude
         res = []
 
+        logger.info('Iniciando iteração para obter dados geográficos')
+
         # Loop para obter todos os dados geográficos dos imóveis
         while True:
             
@@ -1036,7 +1075,7 @@ class ScraperZonaProp:
                     )
                 )
 
-                if df_i.empty or df_i.id.nunique() / df.id.nunique() < 0.15:
+                if df_i.empty or df_i.id.nunique() / df.id.nunique() < 0.10:
                     break
                 else:
                     continue
@@ -1054,7 +1093,9 @@ class ScraperZonaProp:
                     except Exception as exc:
                         continue
 
-            print(f'DF Bronze: {df.id.nunique}, DF Sem Lat/Long: {pd.DataFrame(res).id.nunique()}, Tamanho Lista: {len(res)}')
+            logger.info(f'DF Bronze: {df.id.nunique}, DF Sem Lat/Long: {pd.DataFrame(res).id.nunique()}, Tamanho Lista: {len(res)}')
+
+        logger.info('Obtendo dataframe final com dados geográficos da pasta silver Zonaprop')
 
         # Juntando dados de latitude e longitude
         df_lat_long = (

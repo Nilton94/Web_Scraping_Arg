@@ -1,4 +1,4 @@
-from logging import basicConfig, getLogger, DEBUG, WARNING, FileHandler, StreamHandler
+from logging import basicConfig, getLogger, ERROR, DEBUG, INFO, FileHandler, StreamHandler
 import os
 import datetime
 import pytz
@@ -19,7 +19,7 @@ def get_logger():
 
     # LOG CONFIGS
     basicConfig(
-        level = WARNING,
+        level = ERROR,
         encoding = 'utf-8',
         format = '[%(asctime)s] - %(levelname)s - %(funcName)s - %(message)s',
         datefmt = '%Y-%m-%d %H:%M:%S'
