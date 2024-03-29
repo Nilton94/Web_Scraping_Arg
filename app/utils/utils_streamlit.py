@@ -17,12 +17,16 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
 import openpyxl
-from utils.utils_storage import ParquetStorage
+from utils.utils_storage import ParquetStorage, DuckDBtStorage, get_paths
 
 # Carregando variáveis de ambiente
 load_dotenv()
 
 def get_widgets():
+    '''
+        Retorna os widgets da página do streamlit
+    '''
+    
     # WIDGETS
     locais = list(get_all_states().keys())
     locais.sort()
@@ -155,6 +159,9 @@ def get_widgets():
     )
 
 def get_email_widgets():
+    '''
+        Retorna os widgets relativos ao envio de emails com dados dos imóveis selecionados
+    '''
 
     st.text_input(
         label = 'E-mails (separados por vírgula)',
@@ -271,24 +278,12 @@ def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
 
     return m
 
-
-def get_paths():
-
-    return {
-        'path_page_argenprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'paginas'),
-        'path_page_zonaprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'paginas'),
-        'bronze_argenprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze'),
-        'silver_argenprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'silver'),
-        'bronze_zonaprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze'),
-        'silver_zonaprop': os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver')
-    }
-
 def get_zonaprop():
     
     # Paths
-    path_page_zonaprop = get_paths()['path_page_zonaprop']
-    bronze_zonaprop = get_paths()['bronze_zonaprop']
-    silver_zonaprop = get_paths()['silver_zonaprop']
+    path_page_zonaprop = get_paths()['zonaprop']['paginas']
+    bronze_zonaprop = get_paths()['zonaprop']['bronze']
+    silver_zonaprop = get_paths()['zonaprop']['silver']
 
     # Checando se os dados do dia atual existem
     ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_parquet()
@@ -313,7 +308,7 @@ def get_zonaprop():
 
     else:
         df_zonaprop = pd.read_parquet(
-                path = get_paths()['silver_zonaprop'],
+                path = silver_zonaprop,
                 filters = [
                     ('cidade', 'in', st.session_state.locais),
                     ('tipo_imovel', 'in', st.session_state.tipos)
@@ -325,9 +320,9 @@ def get_zonaprop():
 def get_argenprop():
     
     # Paths
-    path_page_argenprop = get_paths()['path_page_argenprop']
-    bronze_argenprop = get_paths()['bronze_argenprop']
-    silver_argenprop = get_paths()['silver_argenprop']
+    path_page_argenprop = get_paths()['argenprop']['paginas']
+    bronze_argenprop = get_paths()['argenprop']['bronze']
+    silver_argenprop = get_paths()['argenprop']['silver']
 
     # Checando se os dados do dia atual existem
     ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_parquet()
@@ -351,7 +346,7 @@ def get_argenprop():
 
     else:
         df_argenprop = pd.read_parquet(
-                path = get_paths()['silver_argenprop'],
+                path = silver_argenprop,
                 filters = [
                     ('cidade', 'in', st.session_state.locais),
                     ('tipo_imovel', 'in', st.session_state.tipos)
