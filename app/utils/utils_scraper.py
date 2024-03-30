@@ -105,11 +105,17 @@ class ScraperArgenProp:
 
             # Salvando os dados em um db
             DuckDBtStorage(
-                _path = get_paths()['argenprop']['imoveis'], 
+                _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
                 _tabela = 'paginas_argenprop',
                 _df = page_df
             ).create_table()
-            
+
+            DuckDBtStorage(
+                _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+                _tabela = 'paginas_argenprop',
+                _df = page_df
+            ).insert_data()
+
             # Salvando os dados de página - Parquet
             # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'paginas')
             
@@ -481,8 +487,20 @@ class ScraperArgenProp:
         
         logger.info(f'Saldos dados Argenprop na pasta bronze')
 
-        # Salvando dados iniciais
+        # Salvando dados iniciais - db
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+            _tabela = 'bronze_imoveis_argenprop',
+            _df = df
+        ).create_table()
 
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+            _tabela = 'bronze_imoveis_argenprop',
+            _df = df
+        ).insert_data()
+
+        # Salvando dados iniciais - Parquet
         # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'bronze')
             
         # pq.write_to_dataset(
@@ -599,19 +617,32 @@ class ScraperArgenProp:
             .reset_index(drop = True)
         )
 
-        # Salvando como parquet
-        logger.info('Salvando dataframe final Argenprop Silver como parquet!')
+        # # Salvando como parquet
+        # logger.info('Salvando dataframe final Argenprop Silver como parquet!')
 
-        # Salvando dados brutos
-        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'silver')
+        # Salvando dados iniciais - db
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+            _tabela = 'silver_imoveis_argenprop',
+            _df = df_final
+        ).create_table()
+
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+            _tabela = 'silver_imoveis_argenprop',
+            _df = df_final
+        ).insert_data()
+
+        # # Salvando dados brutos
+        # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'argenprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'argenprop', 'imoveis', 'silver')
             
-        pq.write_to_dataset(
-            table = pa.Table.from_pandas(df_final),
-            root_path = path,
-            existing_data_behavior = 'delete_matching',
-            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_argenprop_" + "{i}.parquet",
-            use_legacy_dataset = False
-        )
+        # pq.write_to_dataset(
+        #     table = pa.Table.from_pandas(df_final),
+        #     root_path = path,
+        #     existing_data_behavior = 'delete_matching',
+        #     basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_argenprop_" + "{i}.parquet",
+        #     use_legacy_dataset = False
+        # )
 
         return df_final
 
@@ -702,16 +733,29 @@ class ScraperZonaProp:
         
         df = pd.DataFrame(dados).sort_values('imoveis', ascending = False).reset_index(drop=True)
 
-        # Salvando os dados de página
-        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'paginas')
+        # Salvando os dados em um db
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+            _tabela = 'paginas_zonaprop',
+            _df = df
+        ).create_table()
+
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+            _tabela = 'paginas_zonaprop',
+            _df = df
+        ).insert_data()
+
+        # # Salvando os dados de página
+        # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'paginas') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'paginas')
         
-        pq.write_to_dataset(
-            table = pa.Table.from_pandas(df),
-            root_path = path,
-            existing_data_behavior = 'delete_matching',
-            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_paginas_zonaprop_" + "{i}.parquet",
-            use_legacy_dataset = False
-        )
+        # pq.write_to_dataset(
+        #     table = pa.Table.from_pandas(df),
+        #     root_path = path,
+        #     existing_data_behavior = 'delete_matching',
+        #     basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_paginas_zonaprop_" + "{i}.parquet",
+        #     use_legacy_dataset = False
+        # )
 
         # Retornando df 
         return df
@@ -1030,16 +1074,29 @@ class ScraperZonaProp:
             # .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
 
-        # Salvando dados iniciais brutos
-        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze')
+        # Salvando dados iniciais - db
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+            _tabela = 'bronze_imoveis_zonaprop',
+            _df = df
+        ).create_table()
+
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+            _tabela = 'bronze_imoveis_zonaprop',
+            _df = df
+        ).insert_data()
+
+        # # Salvando dados iniciais brutos
+        # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'bronze')
             
-        pq.write_to_dataset(
-            table = pa.Table.from_pandas(df),
-            root_path = path,
-            existing_data_behavior = 'delete_matching',
-            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_zonaprop_" + "{i}.parquet",
-            use_legacy_dataset = False
-        )
+        # pq.write_to_dataset(
+        #     table = pa.Table.from_pandas(df),
+        #     root_path = path,
+        #     existing_data_behavior = 'delete_matching',
+        #     basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_bronze_zonaprop_" + "{i}.parquet",
+        #     use_legacy_dataset = False
+        # )
 
         return df
         # else:
@@ -1083,7 +1140,7 @@ class ScraperZonaProp:
             # Thread
             with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
                 # Criando a sequência de tasks que serão submetidas para a thread pool
-                rows = {executor.submit(apply_geocoding, row): row for index, row in df_i.iterrows()}
+                rows = {executor.submit(apply_geocoding, row): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
                 
                 # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
                 for future in concurrent.futures.as_completed(rows):
@@ -1145,15 +1202,28 @@ class ScraperZonaProp:
             .reset_index(drop = True)
         )
 
-        # Salvando os dados enriquecidos como parquet
-        path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver')
+        # Salvando dados iniciais - db
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+            _tabela = 'silver_imoveis_zonaprop',
+            _df = df_final
+        ).create_table()
+
+        DuckDBtStorage(
+            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+            _tabela = 'silver_imoveis_zonaprop',
+            _df = df_final
+        ).insert_data()
+
+        # # Salvando os dados enriquecidos como parquet
+        # path = os.path.join(os.getcwd(), 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(), 'app', 'data', 'imoveis', 'zonaprop', 'imoveis', 'silver')
             
-        pq.write_to_dataset(
-            table = pa.Table.from_pandas(df_final),
-            root_path = path,
-            existing_data_behavior = 'delete_matching',
-            basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_zonaprop_" + '{i}.parquet',
-            use_legacy_dataset = False
-        )
+        # pq.write_to_dataset(
+        #     table = pa.Table.from_pandas(df_final),
+        #     root_path = path,
+        #     existing_data_behavior = 'delete_matching',
+        #     basename_template = f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).date()}_imoveis_silver_zonaprop_" + '{i}.parquet',
+        #     use_legacy_dataset = False
+        # )
 
         return df_final
