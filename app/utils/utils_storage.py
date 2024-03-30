@@ -226,6 +226,7 @@ class DuckDBtStorage:
                 SELECT * FROM df_insert
             """
         )
+        cursor.commit()
         cursor.close()
 
 
