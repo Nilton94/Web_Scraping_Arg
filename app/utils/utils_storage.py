@@ -3,7 +3,11 @@ import pyarrow.parquet as pq
 from dataclasses import dataclass
 import pandas as pd
 import duckdb
-import re, datetime, os
+import re, datetime, os, pytz
+from utils.log_config import get_logger
+
+# Criando logger
+logger = get_logger()
 
 def get_paths():
     '''
@@ -119,31 +123,41 @@ class ParquetStorage:
         return resultado
     
 @dataclass
-class DuckDBtStorage:
+class DuckDBStorage:
     '''
         Classe para realizar operações no DB do DuckDB.
 
         Parâmetros:
         ----------
-        _path: str
-            path do DB
+        _base: 'argenprop' ou 'zonaprop
+            Base em que se quer criar o path
+        _folder: 'imoveis', 'paginas', 'bronze', 'silver'
+            Subdiretório dentro da pasta da base
         _df: pd.DataFrame
             Dataframe para ser inserido, nas operações de INSERT, CREATE
         _tipos: list
             Lista com os tipos selecionados no frontend (Streamlit)
         _locais: list
             Lista com os locais selecionados no frontend (Streamlit)
-        _tabela: str
+        _tabela: 'paginas_argenprop', 'bronze_imoveis_argenprop', 'silver_imoveis_argenprop', 'paginas_zonaprop', 'bronze_imoveis_zonaprop', 'silver_imoveis_zonaprop'
             Tabela em que a operação irá ocorrer
 
     '''
 
-    _path: str = None
+    _base: str = None 
+    _folder: str = None
     _df: pd.DataFrame = None
     _tipos: list = None
     _locais: list = None
     _tabela: str = None
 
+    @property
+    def _path(self):
+        if self._base in ['argenprop', 'zonaprop'] and self._folder in ['imoveis', 'paginas', 'bronze', 'silver']:
+            return os.path.join(get_paths()[f'{self._base}']['imoveis'], f'{self._base}.db')
+        else:
+            return ''
+    
     def create_table(self):
         '''
             Cria a tabela, caso não exista
@@ -175,7 +189,9 @@ class DuckDBtStorage:
             cursor.execute(f"DELETE FROM {self._tabela} WHERE data::DATE <= ? ", (data,))
             cursor.commit()
             cursor.close()
-            print(f'Dados antigos excluídos!')
+
+            logger.info('Dados antigos excluídos')
+            # print(f"{datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0)} - Dados antigos excluídos!")
 
         except Exception as e:
             print(f'Erro: {e}')
@@ -228,6 +244,30 @@ class DuckDBtStorage:
         )
         cursor.commit()
         cursor.close()
+    
+    def query_data(self):
+        '''
+            Retorna os dados da tabela selecionada.
+        '''
 
+        try:
+            # Conexão
+            cursor = duckdb.connect(self._path)
 
+            # Checando quais dados constam na tabela
+            df = cursor.execute(
+                f'''
+                    SELECT 
+                            DISTINCT * 
+                    FROM {self._tabela}
+                    WHERE 
+                            cidade IN ({"'"+"', '".join([i for i in self._locais])+"'"})
+                            AND tipo_imovel IN ({"'"+"', '".join([i for i in self._tipos])+"'"})
+                '''
+            ).df()
+            cursor.close()
+
+            return df
+        except Exception as e:
+            print(f'Erro: {e}')
 

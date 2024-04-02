@@ -19,7 +19,7 @@ def get_logger():
 
     # LOG CONFIGS
     basicConfig(
-        level = ERROR,
+        level = INFO,
         encoding = 'utf-8',
         format = '[%(asctime)s] - %(levelname)s - %(funcName)s - %(message)s',
         datefmt = '%Y-%m-%d %H:%M:%S'

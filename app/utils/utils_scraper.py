@@ -17,7 +17,7 @@ from utils.log_config import get_logger
 from utils.lat_long import apply_geocoding, get_state, get_distance_unr, get_distance_provincial, get_distance_baigorria, get_distance_ninos, get_distance_carrasco
 from geopy.distance import distance
 import streamlit as st
-from utils.utils_storage import get_paths, DuckDBtStorage
+from utils.utils_storage import get_paths, DuckDBStorage
 import unidecode
 
 # Criando logger
@@ -33,7 +33,6 @@ class ScraperArgenProp:
 
 
     # Retorna a página async
-    # @cached(ttl = 86400, serializer = PickleSerializer(), cache=Cache.MEMORY)
     async def get_page(self, session, url):
         '''
             ### Objetivo 
@@ -66,7 +65,6 @@ class ScraperArgenProp:
             logger.error(f'Erro na operação: {e}')
         
     # Estimativa do total de páginas do tipo e local especificado, com base no total de imóveis retornado (base com 20 imóveis por página)
-    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def total_pages(self):
         '''
             ### Objetivo 
@@ -80,8 +78,8 @@ class ScraperArgenProp:
             # HTML
             urls = [
                     f'https://www.argenprop.com/{tipo}/alquiler/{local}?pagina-1' 
-                    # for tipo in self._tipo 
-                    for tipo in ['departamentos','casas','campos','cocheras','fondos-de-comercio','galpones','hoteles','locales','negocios-especiales','oficinas','ph','quintas','terrenos']
+                    for tipo in self._tipo 
+                    # for tipo in ['departamentos','casas','campos','cocheras','fondos-de-comercio','galpones','hoteles','locales','negocios-especiales','oficinas','ph','quintas','terrenos']
                     for local in self._local
                 ]
 
@@ -104,14 +102,16 @@ class ScraperArgenProp:
             )
 
             # Salvando os dados em um db
-            DuckDBtStorage(
-                _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+            DuckDBStorage(
+                _base = 'argenprop',
+                _folder = 'paginas',
                 _tabela = 'paginas_argenprop',
                 _df = page_df
             ).create_table()
 
-            DuckDBtStorage(
-                _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+            DuckDBStorage(
+                _base = 'argenprop',
+                _folder = 'paginas',
                 _tabela = 'paginas_argenprop',
                 _df = page_df
             ).insert_data()
@@ -133,8 +133,6 @@ class ScraperArgenProp:
         except Exception as e:
             logger.error(f'Erro na operação: {e}')
 
-    # Retorna todas as páginas de forma async
-    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_all_pages(self):
         '''
             ### Objetivo 
@@ -172,7 +170,6 @@ class ScraperArgenProp:
         except Exception as e:
             logger.error(f'Erro na operação: {e}')
 
-    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_property_data(self):
         '''
             ### Objetivo
@@ -485,17 +482,19 @@ class ScraperArgenProp:
             .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
         
-        logger.info(f'Saldos dados Argenprop na pasta bronze')
+        logger.info(f'Saldos dados Argenprop na tabela bronze')
 
         # Salvando dados iniciais - db
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+        DuckDBStorage(
+            _base = 'argenprop',
+            _folder = 'imoveis',
             _tabela = 'bronze_imoveis_argenprop',
             _df = df
         ).create_table()
 
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+        DuckDBStorage(
+            _base = 'argenprop',
+            _folder = 'imoveis',
             _tabela = 'bronze_imoveis_argenprop',
             _df = df
         ).insert_data()
@@ -515,7 +514,6 @@ class ScraperArgenProp:
         return df
     
     # Função para obter dados geográficos (40 min -> 6 min)
-    # @cached(ttl = 86400, serializer=PickleSerializer(), cache=Cache.MEMORY)
     async def get_final_dataframe(self):
         '''
             ### Objetivo
@@ -548,14 +546,20 @@ class ScraperArgenProp:
                     )
                 )
 
+                logger.info(f'Tamanho da lista de ids sem latitude e longitude: {df_i.id.nunique()}!')
+
                 if df_i.empty or (df_i.id.nunique() / df.id.nunique() < 0.10):
                     break
                 else:
                     continue
 
+            # Dicionário - Tentativa de melhorar performance
+            dict_df_i = df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
+
             with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
                 # Criando a sequência de tasks que serão submetidas para a thread pool
-                rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for index, row in df_i.iterrows()}
+                # rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
+                rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for _, row in dict_df_i.items()}
                 
                 # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
                 for future in concurrent.futures.as_completed(rows):
@@ -618,17 +622,19 @@ class ScraperArgenProp:
         )
 
         # # Salvando como parquet
-        # logger.info('Salvando dataframe final Argenprop Silver como parquet!')
+        logger.info('Salvando dataframe final Argenprop na tabela silver!')
 
         # Salvando dados iniciais - db
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+        DuckDBStorage(
+            _base = 'argenprop',
+            _folder = 'imoveis',
             _tabela = 'silver_imoveis_argenprop',
             _df = df_final
         ).create_table()
 
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['argenprop']['imoveis'], 'argenprop.db'), 
+        DuckDBStorage(
+            _base = 'argenprop',
+            _folder = 'imoveis',
             _tabela = 'silver_imoveis_argenprop',
             _df = df_final
         ).insert_data()
@@ -656,7 +662,6 @@ class ScraperZonaProp:
     _local: list = None
 
 
-    # @st.cache_data(ttl = 86400, max_entries = 100)
     def extract_pages(self, url):
         '''
             * Retorna o total de imóveis do tipo passado
@@ -719,7 +724,7 @@ class ScraperZonaProp:
 
         dados = []
         
-        logger.info('Obtendo dados com ThreadPool')
+        logger.info('Obtendo dados de páginas com ThreadPool')
 
         with concurrent.futures.ThreadPoolExecutor(max_workers = 5) as executor:
             rows = {executor.submit(self.extract_pages, url): url for url in urls}
@@ -733,15 +738,19 @@ class ScraperZonaProp:
         
         df = pd.DataFrame(dados).sort_values('imoveis', ascending = False).reset_index(drop=True)
 
+        logger.info('Salvando dados de página Zonaprop')
+
         # Salvando os dados em um db
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+        DuckDBStorage(
+            _base = 'zonaprop',
+            _folder = 'imoveis',
             _tabela = 'paginas_zonaprop',
             _df = df
         ).create_table()
 
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+        DuckDBStorage(
+            _base = 'zonaprop',
+            _folder = 'imoveis',
             _tabela = 'paginas_zonaprop',
             _df = df
         ).insert_data()
@@ -778,6 +787,8 @@ class ScraperZonaProp:
                 for pagina in range(1, max_pages + 1)
         ]
 
+        logger.info('Obtendo dados de todas as páginas com ThreadPool')
+
         # Thread
         dados = []
         with concurrent.futures.ThreadPoolExecutor(max_workers = 5) as executor:
@@ -789,7 +800,9 @@ class ScraperZonaProp:
                     dados.append(resultado)
                 except Exception as exc:
                     continue
-        
+                
+        logger.info('Fim da obtenção do HTML das páginas!')
+
         return dados
 
     # @st.cache_data(ttl = 86400, max_entries = 100)
@@ -1032,7 +1045,7 @@ class ScraperZonaProp:
             except:
                 continue
 
-        logger.info('Obtendo dataframe da pasta bronze do Zonaprop')
+        logger.info('Obtendo dataframe final da tabela bronze do Zonaprop')
 
         df = (
             pd.DataFrame(
@@ -1074,15 +1087,19 @@ class ScraperZonaProp:
             # .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
 
+        logger.info('Salvando dataframe final na tabela bronze do Zonaprop')
+
         # Salvando dados iniciais - db
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+        DuckDBStorage(
+            _base = 'zonaprop',
+            _folder = 'imoveis',
             _tabela = 'bronze_imoveis_zonaprop',
             _df = df
         ).create_table()
 
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+        DuckDBStorage(
+            _base = 'zonaprop',
+            _folder = 'imoveis',
             _tabela = 'bronze_imoveis_zonaprop',
             _df = df
         ).insert_data()
@@ -1119,6 +1136,7 @@ class ScraperZonaProp:
             # Ids sem latitude e longitude
             if len(res) == 0:
                 df_i = df
+                logger.info(f'Tamanho da lista de ids sem latitude e longitude {len(res)}!')
             else:
                 df_i = (
                     pd.merge(
@@ -1137,10 +1155,14 @@ class ScraperZonaProp:
                 else:
                     continue
 
+            # Dicionário - Tentativa de melhorar performance
+            dict_df_i = df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
+
             # Thread
             with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
                 # Criando a sequência de tasks que serão submetidas para a thread pool
-                rows = {executor.submit(apply_geocoding, row): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
+                # rows = {executor.submit(apply_geocoding, row): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
+                rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for _, row in dict_df_i.items()}
                 
                 # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
                 for future in concurrent.futures.as_completed(rows):
@@ -1152,7 +1174,7 @@ class ScraperZonaProp:
 
             logger.info(f'DF Bronze: {df.id.nunique}, DF Sem Lat/Long: {pd.DataFrame(res).id.nunique()}, Tamanho Lista: {len(res)}')
 
-        logger.info('Obtendo dataframe final com dados geográficos da pasta silver Zonaprop')
+        logger.info('Obtendo dataframe final com dados geográficos da tabela silver Zonaprop')
 
         # Juntando dados de latitude e longitude
         df_lat_long = (
@@ -1202,15 +1224,18 @@ class ScraperZonaProp:
             .reset_index(drop = True)
         )
 
+        logger.info('Salvando dados finais na tabela silver Zonaprop!')
         # Salvando dados iniciais - db
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+        DuckDBStorage(
+            _base = 'zonaprop',
+            _folder = 'imoveis',
             _tabela = 'silver_imoveis_zonaprop',
             _df = df_final
         ).create_table()
 
-        DuckDBtStorage(
-            _path = os.path.join(get_paths()['zonaprop']['imoveis'], 'zonaprop.db'), 
+        DuckDBStorage(
+            _base = 'zonaprop',
+            _folder = 'imoveis',
             _tabela = 'silver_imoveis_zonaprop',
             _df = df_final
         ).insert_data()
