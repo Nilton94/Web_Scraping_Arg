@@ -17,31 +17,6 @@ def get_state(cidade: str = ''):
         
         logger.info('Agrupando dados de província e departamentos!')
         
-        # # Tratando strings
-        # cidade = unidecode.unidecode(cidade).lower()
-
-        # # Bases
-        # df_dpt = pd.read_parquet(
-        #     os.path.join(os.getcwd(),'data','geograficos','departamentos') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','departamentos')
-        # )
-
-        # df_prov_muni = pd.read_parquet(
-        #     os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
-        # )
-
-        # logger.info(f'Procurando estado para a cidade {cidade} - {pais}!')
-
-        # # Procurando a cidade nas bases e retornando o estado/provincia
-        # base_muni = df_prov_muni[df_prov_muni['municipio'] == cidade][['municipio','provincia']]
-        # base_dpt = df_dpt.loc[df_dpt['departamento'] == cidade][['departamento','provincia']]
-
-        # if base_muni.shape[0] > 0: 
-        #     estado = base_muni['provincia'].iloc[0]
-        # elif base_dpt.shape[0] > 0: 
-        #     estado = base_dpt['provincia'].iloc[0]
-        # else: 
-        #     estado = ''
-        
         # JSON COM DADOS DE MUNICIPIO/DEPARTAMENTO E PROVINCIA
         df_mun = pd.read_parquet(
             os.path.join(os.getcwd(),'data','geograficos','provincias_municipios') if os.getcwd().__contains__('app') else os.path.join(os.getcwd(),'app','data','geograficos','provincias_municipios')
@@ -80,8 +55,8 @@ def get_all_states():
     )
     df_dpt_final = df_dpt[['departamento', 'provincia']].drop_duplicates()
 
-    json_mun = {row['municipio_tratado']:row['provincia_tratada'] for index, row in df_mun_final.iterrows()}
-    json_dpt = {row['departamento']:row['provincia'] for index, row in df_dpt_final.iterrows()}
+    json_mun = {row['municipio_tratado']:row['provincia_tratada'] for _, row in df_mun_final.iterrows()}
+    json_dpt = {row['departamento']:row['provincia'] for _, row in df_dpt_final.iterrows()}
 
     estado = {**json_dpt, **json_mun}
 
@@ -116,15 +91,19 @@ def get_geocoding(endereco: str = '', bairro: str = '', cidade: str = '', estado
         # Retornando latitude e longitude
         geo_string = f'{endereco},{bairro},{cidade},{estado},{pais}'.replace(',,',',')
 
-        logger.info(f'Tentando obter coordenadas do local {geo_string}!')
         # geolocator = Nominatim(user_agent = f"{user_agent}")
         response = geocoder.arcgis(geo_string)
 
         # location = geolocator.geocode(geo_string)
         # return location.raw
+
+        logger.info(f'Dados de Latitude e Longitude de: {geo_string} - OK!')
+
         return response.json
     
     except Exception as e:
+        logger.info(f'Dados de Latitude e Longitude de: {geo_string} - ERRO!')
+        
         return {'lat': None, 'lon': None}
     
 # Função para aplicar a get_geocoding em um Dataframe
@@ -151,9 +130,9 @@ def apply_geocoding(row, max_tentativas: int = 1):
 
         if result.get('lat') is not None and result.get('lng') is not None:
             resultado = {
-                    'id': row['id'],
-                    'latitude': result.get('lat'), 
-                    'longitude': result.get('lng')
+                'id': row['id'],
+                'latitude': result.get('lat'), 
+                'longitude': result.get('lng')
             }
 
             return resultado
@@ -162,9 +141,9 @@ def apply_geocoding(row, max_tentativas: int = 1):
         time.sleep(counter)
 
     resultado = {
-                'id': row['id'],
-                'latitude': None, 
-                'longitude': None
+            'id': row['id'],
+            'latitude': None, 
+            'longitude': None
         }
     
     return resultado

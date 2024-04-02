@@ -16,8 +16,6 @@ st.set_page_config(
     }
 
 )
-# HEADER
-# st.header("MAPA DE IMÓVEIS")
 
 # WIDGETS
 get_widgets()
@@ -117,11 +115,6 @@ try:
                         'area_util','ambientes', 'dormitorios', 'banheiros', 'garagens', 'imobiliaria','distancia_hospital_baigorria','distancia_hospital_carrasco','distancia_hospital_ninos','distancia_hospital_provincial',
                         'distancia_unr','latitude','longitude','coordenadas','data'
                     ]]
-                    # [[
-                    #     'id', 'base','tipo_imovel','estado','cidade','bairro', 'endereco', 'url','descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor', 'expensas_moeda', 'expensas_valor', 'valor_total_aluguel',
-                    #     'area_util','ambientes', 'dormitorios', 'banheiros', 'garagens', 'imobiliaria','distancia_hospital_baigorria','distancia_hospital_carrasco','distancia_hospital_ninos','distancia_hospital_provincial',
-                    #     'distancia_unr','latitude','longitude','coordenadas','data','ano','mes','dia'
-                    # ]]
                 )
             )
         except:

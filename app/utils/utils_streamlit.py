@@ -10,6 +10,7 @@ from utils.utils_scraper import ScraperArgenProp, ScraperZonaProp
 import smtplib
 import email.message
 import re
+import time
 import textwrap
 from dotenv import load_dotenv
 from io import BytesIO
@@ -17,10 +18,14 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
 import openpyxl
-from utils.utils_storage import ParquetStorage, DuckDBtStorage, get_paths
+from utils.utils_storage import ParquetStorage, DuckDBStorage, get_paths
+from utils.log_config import get_logger
 
 # Carregando variáveis de ambiente
 load_dotenv()
+
+# Criando logger
+logger = get_logger()
 
 def get_widgets():
     '''
@@ -278,89 +283,136 @@ def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
 
     return m
 
-def get_zonaprop():
+def get_zonaprop_duckdb():
     
-    # Paths
-    path_page_zonaprop = get_paths()['zonaprop']['paginas']
-    bronze_zonaprop = get_paths()['zonaprop']['bronze']
-    silver_zonaprop = get_paths()['zonaprop']['silver']
+    logger.info('Limpando dados da base Zonaprop')
 
-    # Checando se os dados do dia atual existem
-    ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_parquet()
-    ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).check_parquet()
-    ParquetStorage(_path = silver_zonaprop, _locais = st.session_state.locais).check_parquet()
+    # Limpando dados anteriores a hoje
+    for tabela in ['paginas_zonaprop', 'bronze_imoveis_zonaprop', 'silver_imoveis_zonaprop']:
+        DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = tabela).drop_old_data(timedelta = 1)
+    
+    # Checando se os dados solicitados já existem na base
+    check_silver = DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).check_table()
 
-    # Checando se existem arquivos
-    check_page_zonaprop = ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_files()
-    check_bronze_zonaprop = ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).check_files()
-
-    # Caso não exista arquivo na página bronze, carrega tudo
-    if check_bronze_zonaprop == 0:
-        df_zonaprop = ScraperZonaProp(
-                _tipo = [
-                    'casas','departamentos','ph','locales-comerciales','oficinas-comerciales','bodegas-galpones','cocheras','depositos','terrenos',
-                    'edificios','quintas-vacacionales','campos','fondos-de-comercio','hoteles', 'consultorios','cama-nautica','bovedas-nichos-y-parcelas'
-                ], 
-                _local = st.session_state.locais
-            ).get_final_dataframe()
-
-        df_zonaprop.loc[df_zonaprop.tipo_imovel.isin(st.session_state.tipos)]
-
+    # Retornando dados
+    if check_silver == []:
+        logger.info('Rodando scraper Zonaprop para todos os tipos passados')
+        return DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+    
     else:
-        df_zonaprop = pd.read_parquet(
-                path = silver_zonaprop,
-                filters = [
-                    ('cidade', 'in', st.session_state.locais),
-                    ('tipo_imovel', 'in', st.session_state.tipos)
-                ]
-            )
+        logger.info(f'Rodando scraper Zonaprop apenas para {check_silver}')
+        df = ScraperZonaProp(_tipo = check_silver, _local = st.session_state.locais).get_final_dataframe()
+        return DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+
+def get_argenprop_duckdb():   
     
-    return df_zonaprop
+    logger.info('Limpando dados da base Argenprop')
+
+    # Limpando dados anteriores a hoje
+    for tabela in ['paginas_argenprop', 'bronze_imoveis_argenprop', 'silver_imoveis_argenprop']:
+        DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = tabela).drop_old_data(timedelta = 1)
     
-def get_argenprop():
+    # Checando se os dados solicitados já existem na base
+    check_silver = DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).check_table()
+
+    # Retornando dados
+    if check_silver != []:
+        logger.info(f'Rodando scraper Zonaprop apenas para {check_silver}')
+        df_argenprop = asyncio.run(ScraperArgenProp(_tipo = check_silver, _local = st.session_state.locais).get_final_dataframe())
+        return DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
     
-    # Paths
-    path_page_argenprop = get_paths()['argenprop']['paginas']
-    bronze_argenprop = get_paths()['argenprop']['bronze']
-    silver_argenprop = get_paths()['argenprop']['silver']
-
-    # Checando se os dados do dia atual existem
-    ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_parquet()
-    ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).check_parquet()
-    ParquetStorage(_path = silver_argenprop, _locais = st.session_state.locais).check_parquet()
-
-    # Checando se existem arquivos
-    check_page_argenprop = ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_files()
-    check_bronze_argenprop = ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).check_files()
-
-    # Caso não exista arquivo na página bronze, carrega tudo
-    if check_bronze_argenprop == 0:
-        df_argenprop = asyncio.run(
-            ScraperArgenProp(
-                _tipo = ['departamentos','casas','campos','cocheras','fondos-de-comercio','galpones','hoteles','locales','negocios-especiales','oficinas','ph','quintas','terrenos'], 
-                _local = st.session_state.locais
-            ).get_final_dataframe()
-        )
-
-        df_argenprop.loc[df_argenprop.tipo_imovel.isin(st.session_state.tipos)]
-
     else:
-        df_argenprop = pd.read_parquet(
-                path = silver_argenprop,
-                filters = [
-                    ('cidade', 'in', st.session_state.locais),
-                    ('tipo_imovel', 'in', st.session_state.tipos)
-                ]
-            )
+        logger.info('Rodando scraper Argenprop para todos os tipos passados')
+        return DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+
+def get_zonaprop_parquet():
+    pass
+    # # Paths
+    # path_page_zonaprop = get_paths()['zonaprop']['paginas']
+    # bronze_zonaprop = get_paths()['zonaprop']['bronze']
+    # silver_zonaprop = get_paths()['zonaprop']['silver']
+
+    # # Checando se os dados do dia atual existem
+    # ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_parquet()
+    # ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).check_parquet()
+    # ParquetStorage(_path = silver_zonaprop, _locais = st.session_state.locais).check_parquet()
+
+    # # Checando se existem arquivos
+    # check_page_zonaprop = ParquetStorage(_path = path_page_zonaprop, _locais = st.session_state.locais).check_files()
+    # check_bronze_zonaprop = ParquetStorage(_path = bronze_zonaprop, _locais = st.session_state.locais).check_files()
+
+    # # Caso não exista arquivo na página bronze, carrega tudo
+    # if check_bronze_zonaprop == 0:
+    #     df_zonaprop = ScraperZonaProp(
+    #             _tipo = [
+    #                 'casas','departamentos','ph','locales-comerciales','oficinas-comerciales','bodegas-galpones','cocheras','depositos','terrenos',
+    #                 'edificios','quintas-vacacionales','campos','fondos-de-comercio','hoteles', 'consultorios','cama-nautica','bovedas-nichos-y-parcelas'
+    #             ], 
+    #             _local = st.session_state.locais
+    #         ).get_final_dataframe()
+
+    #     df_zonaprop.loc[df_zonaprop.tipo_imovel.isin(st.session_state.tipos)]
+
+    # else:
+    #     df_zonaprop = pd.read_parquet(
+    #             path = silver_zonaprop,
+    #             filters = [
+    #                 ('cidade', 'in', st.session_state.locais),
+    #                 ('tipo_imovel', 'in', st.session_state.tipos)
+    #             ]
+    #         )
     
-    return df_argenprop
+    # return df_zonaprop
+    
+def get_argenprop_parquet():
+    pass
+    # # Paths
+    # path_page_argenprop = get_paths()['argenprop']['paginas']
+    # bronze_argenprop = get_paths()['argenprop']['bronze']
+    # silver_argenprop = get_paths()['argenprop']['silver']
+
+    # # Checando se os dados do dia atual existem
+    # ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_parquet()
+    # ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).check_parquet()
+    # ParquetStorage(_path = silver_argenprop, _locais = st.session_state.locais).check_parquet()
+
+    # # Checando se existem arquivos
+    # check_page_argenprop = ParquetStorage(_path = path_page_argenprop, _locais = st.session_state.locais).check_files()
+    # check_bronze_argenprop = ParquetStorage(_path = bronze_argenprop, _locais = st.session_state.locais).check_files()
+
+    # # Caso não exista arquivo na página bronze, carrega tudo
+    # if check_bronze_argenprop == 0:
+    #     df_argenprop = asyncio.run(
+    #         ScraperArgenProp(
+    #             _tipo = ['departamentos','casas','campos','cocheras','fondos-de-comercio','galpones','hoteles','locales','negocios-especiales','oficinas','ph','quintas','terrenos'], 
+    #             _local = st.session_state.locais
+    #         ).get_final_dataframe()
+    #     )
+
+    #     df_argenprop.loc[df_argenprop.tipo_imovel.isin(st.session_state.tipos)]
+
+    # else:
+    #     df_argenprop = pd.read_parquet(
+    #             path = silver_argenprop,
+    #             filters = [
+    #                 ('cidade', 'in', st.session_state.locais),
+    #                 ('tipo_imovel', 'in', st.session_state.tipos)
+    #             ]
+    #         )
+    
+    # return df_argenprop
 
 def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame = None):
 
     # DADOS
     if ('Argenprop' in st.session_state.base_busca) and ('Zonaprop' in st.session_state.base_busca):
-        df_argenprop = get_argenprop()
-        df_zonaprop = get_zonaprop()
+        logger.info('Obtendo dados do Argenprop')
+        df_argenprop = get_argenprop_duckdb()
+
+        time.sleep(5)
+        
+        logger.info('Obtendo dados do Zonaprop')
+        df_zonaprop = get_zonaprop_duckdb()
 
         df_final = (
             pd.concat(
@@ -397,7 +449,7 @@ def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame =
         )
 
     elif 'Argenprop' in st.session_state.base_busca:
-        df_argenprop = get_argenprop()
+        df_argenprop = get_argenprop_duckdb()
         
         df_final = (
             df_argenprop
@@ -428,7 +480,7 @@ def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame =
         )
 
     elif 'Zonaprop' in st.session_state.base_busca:
-        df_zonaprop = get_zonaprop()
+        df_zonaprop = get_zonaprop_duckdb()
         
         df_final = (
             df_zonaprop
