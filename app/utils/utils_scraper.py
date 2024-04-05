@@ -527,48 +527,50 @@ class ScraperArgenProp:
         logger.info('Obtendo dados de latitude e longitude!')
 
         res = []
-
-        while True:
+        
+        # while True:
             
-            # Ids sem latitude e longitude
-            if len(res) == 0:
-                df_i = df
-            else:
-                df_i = (
-                    pd.merge(
-                        left = df,
-                        right = pd.DataFrame(res),
-                        how = 'left',
-                        on = 'id'
-                    )
-                    .pipe(
-                        lambda df: df.loc[df.latitude.isna()]
-                    )
-                )
+        #     # Ids sem latitude e longitude
+        #     if len(res) == 0:
+        #         df_i = df
+        #     else:
+        #         df_i = (
+        #             pd.merge(
+        #                 left = df,
+        #                 right = pd.DataFrame(res),
+        #                 how = 'left',
+        #                 on = 'id'
+        #             )
+        #             .pipe(
+        #                 lambda df: df.loc[df.latitude.isna()]
+        #             )
+        #         )
 
-                logger.info(f'Tamanho da lista de ids sem latitude e longitude: {df_i.id.nunique()}!')
+        #         logger.info(f'Tamanho da lista de ids sem latitude e longitude: {df_i.id.nunique()}!')
 
-                if df_i.empty or (df_i.id.nunique() / df.id.nunique() < 0.10):
-                    break
-                else:
+        #         if df_i.empty or (df_i.id.nunique() / df.id.nunique() < 0.10):
+        #             break
+        #         else:
+        #             continue
+
+        # Dicionário - Tentativa de melhorar performance
+        dict_df_i = df[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
+            # Criando a sequência de tasks que serão submetidas para a thread pool
+            # rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
+            rows = {executor.submit(apply_geocoding, row, max_tentativas = 5): row for _, row in dict_df_i.items()}
+            
+            # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
+            for future in concurrent.futures.as_completed(rows):
+                try:
+                    resultado = future.result()
+                    res.append(resultado)
+                except Exception as exc:
                     continue
 
-            # Dicionário - Tentativa de melhorar performance
-            dict_df_i = df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
-                # Criando a sequência de tasks que serão submetidas para a thread pool
-                # rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
-                rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for _, row in dict_df_i.items()}
-                
-                # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
-                for future in concurrent.futures.as_completed(rows):
-                    try:
-                        resultado = future.result()
-                        res.append(resultado)
-                    except Exception as exc:
-                        continue
-
+        logger.info(f'DF Bronze: {df.id.nunique()}, Tamanho Lista: {pd.DataFrame(res).id.nunique()}, % de conversão {round(pd.DataFrame(res).id.nunique()/df.id.nunique(),4)*100}')
+        
         logger.info(f'Obtenção de dados geográficos finalizados!')
 
         # Juntando dados de latitude e longitude
@@ -1131,48 +1133,48 @@ class ScraperZonaProp:
         logger.info('Iniciando iteração para obter dados geográficos')
 
         # Loop para obter todos os dados geográficos dos imóveis
-        while True:
+        # while True:
             
-            # Ids sem latitude e longitude
-            if len(res) == 0:
-                df_i = df
-                logger.info(f'Tamanho da lista de ids sem latitude e longitude {len(res)}!')
-            else:
-                df_i = (
-                    pd.merge(
-                        left = df,
-                        right = pd.DataFrame(res),
-                        how = 'left',
-                        on = 'id'
-                    )
-                    .pipe(
-                        lambda df: df.loc[df.latitude.isna()]
-                    )
-                )
+        #     # Ids sem latitude e longitude
+        #     if len(res) == 0:
+        #         df_i = df
+        #         logger.info(f'Tamanho da lista de ids sem latitude e longitude {len(res)}!')
+        #     else:
+        #         df_i = (
+        #             pd.merge(
+        #                 left = df,
+        #                 right = pd.DataFrame(res),
+        #                 how = 'left',
+        #                 on = 'id'
+        #             )
+        #             .pipe(
+        #                 lambda df: df.loc[df.latitude.isna()]
+        #             )
+        #         )
 
-                if df_i.empty or df_i.id.nunique() / df.id.nunique() < 0.10:
-                    break
-                else:
+        #         if df_i.empty or df_i.id.nunique() / df.id.nunique() < 0.10:
+        #             break
+        #         else:
+        #             continue
+
+        # Dicionário - Tentativa de melhorar performance
+        dict_df_i = df[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
+
+        # Thread
+        with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
+            # Criando a sequência de tasks que serão submetidas para a thread pool
+            # rows = {executor.submit(apply_geocoding, row): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
+            rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for _, row in dict_df_i.items()}
+            
+            # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
+            for future in concurrent.futures.as_completed(rows):
+                try:
+                    resultado = future.result()
+                    res.append(resultado)
+                except Exception as exc:
                     continue
 
-            # Dicionário - Tentativa de melhorar performance
-            dict_df_i = df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
-
-            # Thread
-            with concurrent.futures.ThreadPoolExecutor(max_workers = 6) as executor:
-                # Criando a sequência de tasks que serão submetidas para a thread pool
-                # rows = {executor.submit(apply_geocoding, row): row for index, row in df_i[['id', 'estado', 'cidade', 'bairro', 'endereco']].iterrows()}
-                rows = {executor.submit(apply_geocoding, row, max_tentativas = 1): row for _, row in dict_df_i.items()}
-                
-                # Loop para executar as tasks de forma concorrente. Também seria possível criar uma list comprehension que esperaria todos os resultados para retornar os valores.
-                for future in concurrent.futures.as_completed(rows):
-                    try:
-                        resultado = future.result()
-                        res.append(resultado)
-                    except Exception as exc:
-                        continue
-
-            logger.info(f'DF Bronze: {df.id.nunique}, DF Sem Lat/Long: {pd.DataFrame(res).id.nunique()}, Tamanho Lista: {len(res)}')
+        logger.info(f'DF Bronze: {df.id.nunique()}, Tamanho Lista: {pd.DataFrame(res).id.nunique()}, % de conversão {round(pd.DataFrame(res).id.nunique()/df.id.nunique(),4)*100}')
 
         logger.info('Obtendo dataframe final com dados geográficos da tabela silver Zonaprop')
 
