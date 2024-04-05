@@ -107,7 +107,7 @@ def get_geocoding(endereco: str = '', bairro: str = '', cidade: str = '', estado
         return {'lat': None, 'lon': None}
     
 # Função para aplicar a get_geocoding em um Dataframe
-def apply_geocoding(row, max_tentativas: int = 1):
+def apply_geocoding(row, max_tentativas: int = 4):
     '''
         ### Objetivo:
         - Aplica a função a um dataframe e retorna a latitude e longitude com base no endereço 
@@ -120,6 +120,9 @@ def apply_geocoding(row, max_tentativas: int = 1):
     counter = 0
 
     for _ in range(1, max_tentativas + 1):
+        
+        logger.info(f"Local {row['endereco']} - Tentativa {counter}")
+        
         # Resultado de longitude e latitude
         result = get_geocoding(
             endereco = row['endereco'],
@@ -129,6 +132,9 @@ def apply_geocoding(row, max_tentativas: int = 1):
         )
 
         if result.get('lat') is not None and result.get('lng') is not None:
+            
+            logger.info(f"Local {row['endereco']} - OK")
+
             resultado = {
                 'id': row['id'],
                 'latitude': result.get('lat'), 
@@ -139,6 +145,8 @@ def apply_geocoding(row, max_tentativas: int = 1):
         
         counter += 1
         time.sleep(counter)
+
+    logger.info(f"Local {row['endereco']} - ERRO")
 
     resultado = {
             'id': row['id'],

@@ -4,7 +4,7 @@ from utils.utils_streamlit import get_widgets, get_dataframe, get_map, get_email
 import pygwalker as pyg
 import streamlit.components.v1 as components
 from streamlit_folium import st_folium, folium_static
-import re
+import re, datetime, pytz
 
 # CONFIGURACOES STREAMLIT
 st.set_page_config(
@@ -28,7 +28,33 @@ if 'map' not in st.session_state:
 
 try:
     # DADOS
+    
+    inicio = datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond = 0, tzinfo = None)
+
     df_final = get_dataframe()
+
+    fim = datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond = 0, tzinfo = None)
+
+    if 'lista_inicio' not in st.session_state:
+        st.session_state['lista_inicio'] = []
+    if 'lista_fim' not in st.session_state:
+        st.session_state['lista_fim'] = []
+    if 'lista_duracao' not in st.session_state:
+        st.session_state['lista_duracao'] = []
+
+    duracao = fim - inicio
+
+    if duracao > datetime.timedelta(seconds = 30):
+        st.session_state['lista_inicio'].insert(0, inicio) 
+        st.session_state['lista_fim'].insert(0, fim) 
+        st.session_state['lista_duracao'].insert(0, duracao)
+    else:
+        pass
+
+    st.sidebar.markdown('---')
+    st.sidebar.write(f"<b>Início</b>: {st.session_state['lista_inicio'][0]}", unsafe_allow_html = True)
+    st.sidebar.write(f"<b>Fim</b>: {st.session_state['lista_fim'][0]}", unsafe_allow_html = True)
+    st.sidebar.write(f"<b>Duração</b>: {st.session_state['lista_fim'][0] - st.session_state['lista_inicio'][0]}", unsafe_allow_html = True)
 
     with st.expander('### Mapa'):
         col1, col2 = st.columns([0.85, 0.15])
@@ -136,7 +162,8 @@ try:
                 st.write('E-mail enviado com sucesso!')
             except Exception as e:
                 st.error(f'Erro no envio do e-mail: {e}')
+
 except Exception as e:
     # st.write('Selecione ao menos um valor nos filtros de Base, Local e Tipo de Imóvel!')
-    st.write('---')
-    # st.write(e)
+    # st.write('---')
+    st.write(e)
