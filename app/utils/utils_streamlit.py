@@ -2,7 +2,7 @@ import streamlit as st
 import folium
 import pandas as pd
 import os
-from utils.lat_long import get_all_states
+from utils.lat_long import get_all_states, get_state, get_geocoding
 from utils.utils_transformations import TiposImoveis, get_columns_intersection
 from folium.plugins import GroupedLayerControl
 import asyncio
@@ -205,9 +205,13 @@ def get_map(df: pd.DataFrame, tipo_layer: str = 'bairro'):
             impossibilidade de colocar um mesmo marker em layers diferentes
     '''
 
+    # Localização inicial do mapa
+    x = get_geocoding(endereco = 'centro', cidade = st.session_state.locais[0], estado = get_state(cidade = st.session_state.locais[0]))
+    lat_long = [x['lat'], x['lng']]
+
     # Inicializando o mapa
     m = folium.Map(
-        location = [-32.945, -60.667],
+        location = lat_long, #[-32.945, -60.667],
         zoom_start = 15
     )
 
@@ -287,43 +291,67 @@ def get_zonaprop_duckdb():
     
     logger.info('Limpando dados da base Zonaprop')
 
-    # Limpando dados anteriores a hoje
-    for tabela in ['paginas_zonaprop', 'bronze_imoveis_zonaprop', 'silver_imoveis_zonaprop']:
-        DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = tabela).drop_old_data(timedelta = 1)
-    
-    # Checando se os dados solicitados já existem na base
-    check_silver = DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).check_table()
+    try:
+        # Limpando dados anteriores a hoje
+        for tabela in ['paginas_zonaprop', 'bronze_imoveis_zonaprop', 'silver_imoveis_zonaprop']:
+            DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = tabela).drop_old_data(timedelta = 1)
+        
+        # Checando se os dados solicitados já existem na base
+        check_silver = DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).check_table()
 
-    # Retornando dados
-    if check_silver == []:
-        logger.info('Rodando scraper Zonaprop para todos os tipos passados')
-        return DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
-    
-    else:
-        logger.info(f'Rodando scraper Zonaprop apenas para {check_silver}')
-        df = ScraperZonaProp(_tipo = check_silver, _local = st.session_state.locais).get_final_dataframe()
-        return DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+        # Retornando dados
+        if check_silver == []:
+            logger.info('Rodando scraper Zonaprop para todos os tipos passados')
+            return DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+        
+        else:
+            logger.info(f'Rodando scraper Zonaprop apenas para {check_silver}')
+            df = ScraperZonaProp(_tipo = check_silver, _local = st.session_state.locais).get_final_dataframe()
+            return DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+    except:
+        df = pd.DataFrame(
+            columns = [
+                'id', 'base', 'tipo_imovel', 'estado', 'cidade', 'bairro', 'endereco', 'url', 'descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor',
+                'desconto_aluguel', 'expensas_moeda', 'expensas_valor', 'valor_total_aluguel', 'area_total', 'area_util', 'ambientes',
+                'dormitorios', 'banheiros', 'garagens', 'destaque', 'imobiliaria', 'data', 'ano', 'mes', 'dia', 'latitude', 'longitude', 'coordenadas',
+                'distancia_unr', 'distancia_hospital_provincial', 'distancia_hospital_baigorria', 'distancia_hospital_ninos', 'distancia_hospital_carrasco'
+            ]
+        )
+
+        return df
 
 def get_argenprop_duckdb():   
     
     logger.info('Limpando dados da base Argenprop')
 
-    # Limpando dados anteriores a hoje
-    for tabela in ['paginas_argenprop', 'bronze_imoveis_argenprop', 'silver_imoveis_argenprop']:
-        DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = tabela).drop_old_data(timedelta = 1)
-    
-    # Checando se os dados solicitados já existem na base
-    check_silver = DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).check_table()
+    try:
+        # Limpando dados anteriores a hoje
+        for tabela in ['paginas_argenprop', 'bronze_imoveis_argenprop', 'silver_imoveis_argenprop']:
+            DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = tabela).drop_old_data(timedelta = 1)
+        
+        # Checando se os dados solicitados já existem na base
+        check_silver = DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).check_table()
 
-    # Retornando dados
-    if check_silver != []:
-        logger.info(f'Rodando scraper Zonaprop apenas para {check_silver}')
-        df_argenprop = asyncio.run(ScraperArgenProp(_tipo = check_silver, _local = st.session_state.locais).get_final_dataframe())
-        return DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
-    
-    else:
-        logger.info('Rodando scraper Argenprop para todos os tipos passados')
-        return DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+        # Retornando dados
+        if check_silver != []:
+            logger.info(f'Rodando scraper Zonaprop apenas para {check_silver}')
+            df_argenprop = asyncio.run(ScraperArgenProp(_tipo = check_silver, _local = st.session_state.locais).get_final_dataframe())
+            return DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+        
+        else:
+            logger.info('Rodando scraper Argenprop para todos os tipos passados')
+            return DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
+    except:
+        df = pd.DataFrame(
+            columns = [
+                'id', 'base', 'tipo_imovel', 'estado', 'cidade', 'bairro', 'endereco', 'url', 'descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor',
+                'expensas_moeda', 'expensas_valor', 'valor_total_aluguel', 'area_util', 'antiguidade', 'banheiros', 'tipo_banheiro', 'ambientes', 'dormitorios',
+                'orientacao', 'garagens', 'estado_propriedade', 'tipo_local', 'imobiliaria', 'num_fotos', 'fotos', 'card_points', 'wsp', 'data',
+                'ano', 'mes', 'dia', 'latitude', 'longitude', 'coordenadas', 'distancia_unr', 'distancia_hospital_provincial',
+                'distancia_hospital_baigorria', 'distancia_hospital_ninos', 'distancia_hospital_carrasco']
+        )
+
+        return df
 
 def get_zonaprop_parquet():
     pass
@@ -414,101 +442,181 @@ def get_dataframe(df_argenprop: pd.DataFrame = None, df_zonaprop: pd.DataFrame =
         logger.info('Obtendo dados do Zonaprop')
         df_zonaprop = get_zonaprop_duckdb()
 
-        df_final = (
-            pd.concat(
-                [
-                    df_argenprop.loc[:, get_columns_intersection(df_argenprop, df_zonaprop)],
-                    df_zonaprop.loc[:, get_columns_intersection(df_argenprop, df_zonaprop)]
-                ],
-                ignore_index = True
-            )
-            .pipe(
-                lambda df: df.loc[
-                    (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
-                    & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
-                    & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
-                    & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
-                    & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
-                    & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
-                    & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
-                    & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
-                    & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
-                    & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
-                    & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
-                    & (df.aluguel_moeda.isin(
-                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+        if 'rosario' in st.session_state.locais:
+            df_final = (
+                pd.concat(
+                    [
+                        df_argenprop.loc[:, get_columns_intersection(df_argenprop, df_zonaprop)],
+                        df_zonaprop.loc[:, get_columns_intersection(df_argenprop, df_zonaprop)]
+                    ],
+                    ignore_index = True
+                )
+                .pipe(
+                    lambda df: df.loc[
+                        (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
+                        & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
+                        & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
+                        & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
+                        & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
+                        & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                        & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                        & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                        & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                        & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                        & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                        & (df.aluguel_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                            )
                         )
-                    )
-                    & (df.expensas_moeda.isin(
-                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                        & (df.expensas_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                            )
                         )
-                    )
-                ]
+                    ]
+                )
+                .reset_index(drop = True)
             )
-            .reset_index(drop = True)
-        )
+        else:
+            df_final = (
+                pd.concat(
+                    [
+                        df_argenprop.loc[:, get_columns_intersection(df_argenprop, df_zonaprop)],
+                        df_zonaprop.loc[:, get_columns_intersection(df_argenprop, df_zonaprop)]
+                    ],
+                    ignore_index = True
+                )
+                .pipe(
+                    lambda df: df.loc[
+                        (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                        & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                        & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                        & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                        & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                        & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                        & (df.aluguel_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                            )
+                        )
+                        & (df.expensas_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                            )
+                        )
+                    ]
+                )
+                .reset_index(drop = True)
+            )
 
     elif 'Argenprop' in st.session_state.base_busca:
+        logger.info(f'Obtendo apenas dados do {st.session_state.base_busca} para o local {st.session_state.locais}, tipos {st.session_state.tipos}')
         df_argenprop = get_argenprop_duckdb()
         
-        df_final = (
-            df_argenprop
-            .pipe(
-                lambda df: df.loc[
-                    (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
-                    & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
-                    & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
-                    & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
-                    & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
-                    & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
-                    & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
-                    & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
-                    & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
-                    & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
-                    & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
-                    & (df.aluguel_moeda.isin(
-                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+        if 'rosario' in st.session_state.locais:
+            df_final = (
+                df_argenprop
+                .pipe(
+                    lambda df: df.loc[
+                        (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
+                        & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
+                        & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
+                        & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
+                        & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
+                        & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                        & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                        & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                        & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                        & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                        & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                        & (df.aluguel_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                            )
                         )
-                    )
-                    & (df.expensas_moeda.isin(
-                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                        & (df.expensas_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                            )
                         )
-                    )
-                ]
+                    ]
+                )
+                .reset_index(drop = True)
             )
-            .reset_index(drop = True)
-        )
+        else:
+            df_final = (
+                df_argenprop
+                .pipe(
+                    lambda df: df.loc[
+                        (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                        & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                        & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                        & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                        & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                        & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                        & (df.aluguel_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                            )
+                        )
+                        & (df.expensas_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                            )
+                        )
+                    ]
+                )
+                .reset_index(drop = True)
+            )
 
     elif 'Zonaprop' in st.session_state.base_busca:
+        logger.info(f'Obtendo apenas dados do {st.session_state.base_busca} para o local {st.session_state.locais}, tipos {st.session_state.tipos}')
         df_zonaprop = get_zonaprop_duckdb()
         
-        df_final = (
-            df_zonaprop
-            .pipe(
-                lambda df: df.loc[
-                    (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
-                    & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
-                    & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
-                    & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
-                    & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
-                    & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
-                    & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
-                    & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
-                    & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
-                    & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
-                    & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
-                    & (df.aluguel_moeda.isin(
-                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+        if 'rosario' in st.session_state.locais:
+            df_final = (
+                df_zonaprop
+                .pipe(
+                    lambda df: df.loc[
+                        (df.distancia_unr.between(st.session_state.distancia_unr[0], st.session_state.distancia_unr[1]))
+                        & (df.distancia_hospital_provincial.between(st.session_state.distancia_provincial[0], st.session_state.distancia_provincial[1]))
+                        & (df.distancia_hospital_ninos.between(st.session_state.distancia_ninos[0], st.session_state.distancia_ninos[1]))
+                        & (df.distancia_hospital_carrasco.between(st.session_state.distancia_carrasco[0], st.session_state.distancia_carrasco[1]))
+                        & (df.distancia_hospital_baigorria.between(st.session_state.distancia_baigorria[0], st.session_state.distancia_baigorria[1]))
+                        & (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                        & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                        & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                        & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                        & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                        & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                        & (df.aluguel_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                            )
                         )
-                    )
-                    & (df.expensas_moeda.isin(
-                            ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                        & (df.expensas_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                            )
                         )
-                    )
-                ]
+                    ]
+                )
+                .reset_index(drop = True)
             )
-            .reset_index(drop = True)
-        )
+        else:
+            df_final = (
+                df_zonaprop
+                .pipe(
+                    lambda df: df.loc[
+                        (df.area_util.between(st.session_state.area_util[0], st.session_state.area_util[1]))
+                        & (df.banheiros.between(st.session_state.banheiros[0], st.session_state.banheiros[1]))
+                        & (df.ambientes.between(st.session_state.ambientes[0], st.session_state.ambientes[1]))
+                        & (df.dormitorios.between(st.session_state.dormitorios[0], st.session_state.dormitorios[1]))
+                        & (df.aluguel_valor.between(st.session_state.aluguel_valor[0], st.session_state.aluguel_valor[1]))
+                        & (df.expensas_valor.between(st.session_state.expensas_valor[0], st.session_state.expensas_valor[1]))
+                        & (df.aluguel_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.aluguel_moeda) == 0 else st.session_state.aluguel_moeda
+                            )
+                        )
+                        & (df.expensas_moeda.isin(
+                                ['$', 'USD', 'Sem info', 'Consultar precio'] if len(st.session_state.expensas_moeda) == 0 else st.session_state.expensas_moeda
+                            )
+                        )
+                    ]
+                )
+                .reset_index(drop = True)
+            )
 
     else:
         st.text('Selecione uma ou mais bases!')

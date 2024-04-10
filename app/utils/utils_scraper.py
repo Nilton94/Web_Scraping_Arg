@@ -482,7 +482,7 @@ class ScraperArgenProp:
             .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
         
-        logger.info(f'Saldos dados Argenprop na tabela bronze')
+        logger.info(f'Salvando dados Argenprop na tabela bronze')
 
         # Salvando dados iniciais - db
         DuckDBStorage(

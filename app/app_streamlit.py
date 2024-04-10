@@ -28,7 +28,6 @@ if 'map' not in st.session_state:
 
 try:
     # DADOS
-    
     inicio = datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond = 0, tzinfo = None)
 
     df_final = get_dataframe()
@@ -52,9 +51,12 @@ try:
         pass
 
     st.sidebar.markdown('---')
-    st.sidebar.write(f"<b>Início</b>: {st.session_state['lista_inicio'][0]}", unsafe_allow_html = True)
-    st.sidebar.write(f"<b>Fim</b>: {st.session_state['lista_fim'][0]}", unsafe_allow_html = True)
-    st.sidebar.write(f"<b>Duração</b>: {st.session_state['lista_fim'][0] - st.session_state['lista_inicio'][0]}", unsafe_allow_html = True)
+    try:
+        st.sidebar.write(f"<b>Início</b>: {st.session_state['lista_inicio'][0]}", unsafe_allow_html = True)
+        st.sidebar.write(f"<b>Fim</b>: {st.session_state['lista_fim'][0]}", unsafe_allow_html = True)
+        st.sidebar.write(f"<b>Duração</b>: {st.session_state['lista_fim'][0] - st.session_state['lista_inicio'][0]}", unsafe_allow_html = True)
+    except:
+        pass
 
     with st.expander('### Mapa'):
         col1, col2 = st.columns([0.85, 0.15])
