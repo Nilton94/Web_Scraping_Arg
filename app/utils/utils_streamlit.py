@@ -309,14 +309,15 @@ def get_zonaprop_duckdb():
             df = ScraperZonaProp(_tipo = check_silver, _local = st.session_state.locais).get_final_dataframe()
             return DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
     except:
-        df = pd.DataFrame(
-            columns = [
-                'id', 'base', 'tipo_imovel', 'estado', 'cidade', 'bairro', 'endereco', 'url', 'descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor',
-                'desconto_aluguel', 'expensas_moeda', 'expensas_valor', 'valor_total_aluguel', 'area_total', 'area_util', 'ambientes',
-                'dormitorios', 'banheiros', 'garagens', 'destaque', 'imobiliaria', 'data', 'ano', 'mes', 'dia', 'latitude', 'longitude', 'coordenadas',
-                'distancia_unr', 'distancia_hospital_provincial', 'distancia_hospital_baigorria', 'distancia_hospital_ninos', 'distancia_hospital_carrasco'
-            ]
-        )
+        # df = pd.DataFrame(
+        #     columns = [
+        #         'id', 'base', 'tipo_imovel', 'estado', 'cidade', 'bairro', 'endereco', 'url', 'descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor',
+        #         'desconto_aluguel', 'expensas_moeda', 'expensas_valor', 'valor_total_aluguel', 'area_total', 'area_util', 'ambientes',
+        #         'dormitorios', 'banheiros', 'garagens', 'destaque', 'imobiliaria', 'data', 'ano', 'mes', 'dia', 'latitude', 'longitude', 'coordenadas',
+        #         'distancia_unr', 'distancia_hospital_provincial', 'distancia_hospital_baigorria', 'distancia_hospital_ninos', 'distancia_hospital_carrasco'
+        #     ]
+        # )
+        df = DuckDBStorage(_base = 'zonaprop', _folder = 'imoveis', _tabela = 'silver_imoveis_zonaprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
 
         return df
 
@@ -342,14 +343,15 @@ def get_argenprop_duckdb():
             logger.info('Rodando scraper Argenprop para todos os tipos passados')
             return DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
     except:
-        df = pd.DataFrame(
-            columns = [
-                'id', 'base', 'tipo_imovel', 'estado', 'cidade', 'bairro', 'endereco', 'url', 'descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor',
-                'expensas_moeda', 'expensas_valor', 'valor_total_aluguel', 'area_util', 'antiguidade', 'banheiros', 'tipo_banheiro', 'ambientes', 'dormitorios',
-                'orientacao', 'garagens', 'estado_propriedade', 'tipo_local', 'imobiliaria', 'num_fotos', 'fotos', 'card_points', 'wsp', 'data',
-                'ano', 'mes', 'dia', 'latitude', 'longitude', 'coordenadas', 'distancia_unr', 'distancia_hospital_provincial',
-                'distancia_hospital_baigorria', 'distancia_hospital_ninos', 'distancia_hospital_carrasco']
-        )
+        # df = pd.DataFrame(
+        #     columns = [
+        #         'id', 'base', 'tipo_imovel', 'estado', 'cidade', 'bairro', 'endereco', 'url', 'descricao', 'titulo', 'aluguel_moeda', 'aluguel_valor',
+        #         'expensas_moeda', 'expensas_valor', 'valor_total_aluguel', 'area_util', 'antiguidade', 'banheiros', 'tipo_banheiro', 'ambientes', 'dormitorios',
+        #         'orientacao', 'garagens', 'estado_propriedade', 'tipo_local', 'imobiliaria', 'num_fotos', 'fotos', 'card_points', 'wsp', 'data',
+        #         'ano', 'mes', 'dia', 'latitude', 'longitude', 'coordenadas', 'distancia_unr', 'distancia_hospital_provincial',
+        #         'distancia_hospital_baigorria', 'distancia_hospital_ninos', 'distancia_hospital_carrasco']
+        # )
+        df = DuckDBStorage(_base = 'argenprop', _folder = 'imoveis', _tabela = 'silver_imoveis_argenprop', _tipos = st.session_state.tipos, _locais = st.session_state.locais).query_data()
 
         return df
 
