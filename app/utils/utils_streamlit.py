@@ -33,7 +33,10 @@ def get_widgets():
     '''
     
     # WIDGETS
-    locais = list(get_all_states().keys())
+    # locais = list(get_all_states().keys())
+    # locais.sort()
+    locais = [x.replace(' ', '-') for x in list(get_all_states().keys())]
+    locais.extend(['buenos-aires', 'mendoza'])
     locais.sort()
 
     with st.expander('### Principais Filtros'):

@@ -167,5 +167,5 @@ try:
 
 except Exception as e:
     # st.write('Selecione ao menos um valor nos filtros de Base, Local e Tipo de Imóvel!')
-    # st.write('---')
-    st.write(e)
+    st.write('---')
+    # st.write(e)
