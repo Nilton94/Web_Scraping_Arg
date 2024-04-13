@@ -45,7 +45,7 @@ class ScraperArgenProp:
         try:
             async with session.get(url) as response:
                 
-                logger.info(f'Obtendo código html da url {url}')
+                logger.info(f'{self.__class__.__name__} - Obtendo código html da url {url}')
 
                 html_source = await response.text()
                 return {
@@ -62,7 +62,7 @@ class ScraperArgenProp:
                     'dia': str(datetime.datetime.now(tz = pytz.timezone('America/Sao_Paulo')).replace(microsecond=0).day)
                 }
         except Exception as e:
-            logger.error(f'Erro na operação: {e}')
+            logger.error(f'{self.__class__.__name__} - Erro na operação: {e}')
         
     # Estimativa do total de páginas do tipo e local especificado, com base no total de imóveis retornado (base com 20 imóveis por página)
     async def total_pages(self):
@@ -73,7 +73,7 @@ class ScraperArgenProp:
         '''
 
         try:
-            logger.info('Obtendo lista de htmls para definir total de páginas por tipo de imóvel!')
+            logger.info(f'{self.__class__.__name__} - Obtendo lista de htmls para definir total de páginas por tipo de imóvel!')
 
             # HTML
             urls = [
@@ -83,17 +83,17 @@ class ScraperArgenProp:
                     for local in self._local
                 ]
 
-            logger.info('Iniciando execução assíncrona das tasks')
+            logger.info(f'{self.__class__.__name__} - Iniciando execução assíncrona das tasks')
 
             async with aiohttp.ClientSession() as session:
                 tasks = [self.get_page(session, url) for url in urls]
                 html_pages = await asyncio.gather(*tasks)
 
-                logger.info('Retornando resultado com todos os códigos html!')
+                logger.info(f'{self.__class__.__name__} - Retornando resultado com todos os códigos html!')
             
             html_source = html_pages
 
-            logger.info('Criando o Dataframe com dados de imóveis das páginas!')
+            logger.info(f'{self.__class__.__name__} - Criando o Dataframe com dados de imóveis das páginas!')
 
             # Criando Dataframe
             page_df = (
@@ -131,7 +131,7 @@ class ScraperArgenProp:
             return page_df
         
         except Exception as e:
-            logger.error(f'Erro na operação: {e}')
+            logger.error(f'{self.__class__.__name__} - Erro na operação: {e}')
 
     async def get_all_pages(self):
         '''
@@ -146,7 +146,7 @@ class ScraperArgenProp:
         page_df = await self.total_pages()
 
         try:
-            logger.info('Obtendo lista de urls!')
+            logger.info(f'{self.__class__.__name__} - Obtendo lista de urls!')
 
             # Retorna dados de todas as páginas e não apenas da primeira página
             urls = [
@@ -157,18 +157,18 @@ class ScraperArgenProp:
                 for pagina in range(1, max_pages + 1)
             ]
 
-            logger.info('Iniciando execução assíncrona das tasks')
+            logger.info(f'{self.__class__.__name__} - Iniciando execução assíncrona das tasks')
 
             async with aiohttp.ClientSession() as session:
                 tasks = [self.get_page(session, url) for url in urls]
                 html_pages = await asyncio.gather(*tasks)
 
-                logger.info('Retornando resultado com todos os códigos html!')
+                logger.info(f'{self.__class__.__name__} - Retornando resultado com todos os códigos html!')
 
                 return html_pages
             
         except Exception as e:
-            logger.error(f'Erro na operação: {e}')
+            logger.error(f'{self.__class__.__name__} - Erro na operação: {e}')
 
     async def get_property_data(self):
         '''
@@ -179,12 +179,12 @@ class ScraperArgenProp:
         # Lista de htmls
         html = await self.get_all_pages()
 
-        logger.info('Obtendo lista de htmls para extrair dados de imóveis!')
+        logger.info(f'{self.__class__.__name__} - Obtendo lista de htmls para extrair dados de imóveis!')
 
         # Lista que guardará os dados dos imóveis
         dados = []
 
-        logger.info('Iniciando iteração sobre lista de htmls!')
+        logger.info(f'{self.__class__.__name__} - Iniciando iteração sobre lista de htmls!')
 
         # Iterando sobre os códigos das páginas e extraindo os dados dos imóveis
         for x in html:
@@ -428,12 +428,12 @@ class ScraperArgenProp:
                             ]
                         )
                 except Exception as e:
-                    logger.error(f'Erro na extração dos dados da url {x["url"]}: {e}')
+                    logger.error(f'{self.__class__.__name__} - Erro na extração dos dados da url {x["url"]}: {e}')
                     continue
             else:
                 continue
         
-        logger.info('Iteração finalizada. Guardando os dados em um Dataframe!')
+        logger.info(f'{self.__class__.__name__} - Iteração finalizada. Guardando os dados em um Dataframe!')
 
         # Criando Dataframe
         df = (
@@ -482,7 +482,7 @@ class ScraperArgenProp:
             .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
         
-        logger.info(f'Salvando dados Argenprop na tabela bronze')
+        logger.info(f'{self.__class__.__name__} - Salvando dados Argenprop na tabela bronze')
 
         # Salvando dados iniciais - db
         DuckDBStorage(
@@ -524,34 +524,9 @@ class ScraperArgenProp:
         df = await self.get_property_data()
 
         # Obtendo dados de latitude e longitude
-        logger.info('Obtendo dados de latitude e longitude!')
+        logger.info(f'{self.__class__.__name__} - Obtendo dados de latitude e longitude!')
 
         res = []
-        
-        # while True:
-            
-        #     # Ids sem latitude e longitude
-        #     if len(res) == 0:
-        #         df_i = df
-        #     else:
-        #         df_i = (
-        #             pd.merge(
-        #                 left = df,
-        #                 right = pd.DataFrame(res),
-        #                 how = 'left',
-        #                 on = 'id'
-        #             )
-        #             .pipe(
-        #                 lambda df: df.loc[df.latitude.isna()]
-        #             )
-        #         )
-
-        #         logger.info(f'Tamanho da lista de ids sem latitude e longitude: {df_i.id.nunique()}!')
-
-        #         if df_i.empty or (df_i.id.nunique() / df.id.nunique() < 0.10):
-        #             break
-        #         else:
-        #             continue
 
         # Dicionário - Tentativa de melhorar performance
         dict_df_i = df[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
@@ -569,9 +544,9 @@ class ScraperArgenProp:
                 except Exception as exc:
                     continue
 
-        logger.info(f'DF Bronze: {df.id.nunique()}, Tamanho Lista: {pd.DataFrame(res).id.nunique()}, % de conversão {round(pd.DataFrame(res).id.nunique()/df.id.nunique(),4)*100}')
+        logger.info(f'{self.__class__.__name__} - DF Bronze: {df.id.nunique()}, Tamanho Lista: {pd.DataFrame(res).id.nunique()}, % de conversão {round(pd.DataFrame(res).id.nunique()/df.id.nunique(),4)*100}')
         
-        logger.info(f'Obtenção de dados geográficos finalizados!')
+        logger.info(f'{self.__class__.__name__} - Obtenção de dados geográficos finalizados!')
 
         # Juntando dados de latitude e longitude
         df_lat_long = (
@@ -611,7 +586,7 @@ class ScraperArgenProp:
         )
 
         # Dataframe final
-        logger.info('Criando dataframe final!')
+        logger.info(f'{self.__class__.__name__} - Criando dataframe final!')
 
         df_final = (
             df_lat_long
@@ -624,7 +599,7 @@ class ScraperArgenProp:
         )
 
         # # Salvando como parquet
-        logger.info('Salvando dataframe final Argenprop na tabela silver!')
+        logger.info(f'{self.__class__.__name__} - Salvando dataframe final Argenprop na tabela silver!')
 
         # Salvando dados iniciais - db
         DuckDBStorage(
@@ -670,7 +645,7 @@ class ScraperZonaProp:
         '''
 
         # Browser
-        logger.info('Criando o browser e coletando o HTML')
+        logger.info(f'{self.__class__.__name__} - Criando o browser e coletando o HTML')
 
         options = Options()
         options.add_argument("--headless")
@@ -679,7 +654,7 @@ class ScraperZonaProp:
         source_code = browser.find_element(By.XPATH, '//*').get_attribute("innerHTML")
         browser.quit()
 
-        logger.info('Tratando os dados da HTML')
+        logger.info(f'{self.__class__.__name__} - Tratando os dados da HTML')
 
         # Dados
         try:
@@ -719,14 +694,14 @@ class ScraperZonaProp:
             * Recebe os tipos de imóveis e os locais e obtém o total de páginas puxando a função extract_pages usando threads
         '''
 
-        logger.info('Criando lista de urls')
+        logger.info(f'{self.__class__.__name__} - Criando lista de urls')
 
         # Lista de urls com base nos dados de tipo e local
         urls = [f'https://www.zonaprop.com.ar/{tipo}-alquiler-{local}-pagina-1.html' for tipo in self._tipo for local in self._local]
 
         dados = []
         
-        logger.info('Obtendo dados de páginas com ThreadPool')
+        logger.info(f'{self.__class__.__name__} - Obtendo dados de páginas com ThreadPool')
 
         with concurrent.futures.ThreadPoolExecutor(max_workers = 5) as executor:
             rows = {executor.submit(self.extract_pages, url): url for url in urls}
@@ -740,7 +715,7 @@ class ScraperZonaProp:
         
         df = pd.DataFrame(dados).sort_values('imoveis', ascending = False).reset_index(drop=True)
 
-        logger.info('Salvando dados de página Zonaprop')
+        logger.info(f'{self.__class__.__name__} - Salvando dados de página Zonaprop')
 
         # Salvando os dados em um db
         DuckDBStorage(
@@ -789,7 +764,7 @@ class ScraperZonaProp:
                 for pagina in range(1, max_pages + 1)
         ]
 
-        logger.info('Obtendo dados de todas as páginas com ThreadPool')
+        logger.info(f'{self.__class__.__name__} - Obtendo dados de todas as páginas com ThreadPool')
 
         # Thread
         dados = []
@@ -803,7 +778,7 @@ class ScraperZonaProp:
                 except Exception as exc:
                     continue
                 
-        logger.info('Fim da obtenção do HTML das páginas!')
+        logger.info(f'{self.__class__.__name__} - Fim da obtenção do HTML das páginas!')
 
         return dados
 
@@ -819,7 +794,7 @@ class ScraperZonaProp:
         # Dados dos imóveis
         dados = []
 
-        logger.info('Iniciando iteração sobre o hmtl das páginas')
+        logger.info(f'{self.__class__.__name__} - Iniciando iteração sobre o hmtl das páginas')
 
         for j in x:
 
@@ -1047,7 +1022,7 @@ class ScraperZonaProp:
             except:
                 continue
 
-        logger.info('Obtendo dataframe final da tabela bronze do Zonaprop')
+        logger.info(f'{self.__class__.__name__} - Obtendo dataframe final da tabela bronze do Zonaprop')
 
         df = (
             pd.DataFrame(
@@ -1089,7 +1064,7 @@ class ScraperZonaProp:
             # .drop_duplicates(subset = ['id', 'tipo_imovel', 'endereco'])
         )
 
-        logger.info('Salvando dataframe final na tabela bronze do Zonaprop')
+        logger.info(f'{self.__class__.__name__} - Salvando dataframe final na tabela bronze do Zonaprop')
 
         # Salvando dados iniciais - db
         DuckDBStorage(
@@ -1130,32 +1105,7 @@ class ScraperZonaProp:
         # Obtendo dados de longitude e latitude
         res = []
 
-        logger.info('Iniciando iteração para obter dados geográficos')
-
-        # Loop para obter todos os dados geográficos dos imóveis
-        # while True:
-            
-        #     # Ids sem latitude e longitude
-        #     if len(res) == 0:
-        #         df_i = df
-        #         logger.info(f'Tamanho da lista de ids sem latitude e longitude {len(res)}!')
-        #     else:
-        #         df_i = (
-        #             pd.merge(
-        #                 left = df,
-        #                 right = pd.DataFrame(res),
-        #                 how = 'left',
-        #                 on = 'id'
-        #             )
-        #             .pipe(
-        #                 lambda df: df.loc[df.latitude.isna()]
-        #             )
-        #         )
-
-        #         if df_i.empty or df_i.id.nunique() / df.id.nunique() < 0.10:
-        #             break
-        #         else:
-        #             continue
+        logger.info(f'{self.__class__.__name__} - Iniciando iteração para obter dados geográficos')
 
         # Dicionário - Tentativa de melhorar performance
         dict_df_i = df[['id', 'estado', 'cidade', 'bairro', 'endereco']].to_dict(orient = 'index')
@@ -1174,9 +1124,9 @@ class ScraperZonaProp:
                 except Exception as exc:
                     continue
 
-        logger.info(f'DF Bronze: {df.id.nunique()}, Tamanho Lista: {pd.DataFrame(res).id.nunique()}, % de conversão {round(pd.DataFrame(res).id.nunique()/df.id.nunique(),4)*100}')
+        logger.info(f'{self.__class__.__name__} - DF Bronze: {df.id.nunique()}, Tamanho Lista: {pd.DataFrame(res).id.nunique()}, % de conversão {round(pd.DataFrame(res).id.nunique()/df.id.nunique(),4)*100}')
 
-        logger.info('Obtendo dataframe final com dados geográficos da tabela silver Zonaprop')
+        logger.info(f'{self.__class__.__name__} - Obtendo dataframe final com dados geográficos da tabela silver Zonaprop')
 
         # Juntando dados de latitude e longitude
         df_lat_long = (
@@ -1226,7 +1176,7 @@ class ScraperZonaProp:
             .reset_index(drop = True)
         )
 
-        logger.info('Salvando dados finais na tabela silver Zonaprop!')
+        logger.info(f'{self.__class__.__name__} - Salvando dados finais na tabela silver Zonaprop!')
         # Salvando dados iniciais - db
         DuckDBStorage(
             _base = 'zonaprop',
