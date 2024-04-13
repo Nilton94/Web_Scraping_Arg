@@ -10,10 +10,28 @@ RUN apt-get update && apt-get install -y \
     curl \
     software-properties-common \
     git \
+    firefox-esr \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiando repositório
-RUN git clone https://github.com/Nilton94/Web_Scraping_Arg/tree/main/app .
+# Instalando GeckoDriver
+RUN apt-get update && apt-get install -y \
+    wget \
+    && wget -O /tmp/geckodriver.tar.gz https://github.com/mozilla/geckodriver/releases/download/v0.30.0/geckodriver-v0.30.0-linux64.tar.gz \
+    && tar -C /usr/local/bin -xzf /tmp/geckodriver.tar.gz \
+    && rm /tmp/geckodriver.tar.gz
+
+# # Instalando Chorme
+# RUN apt-get update && apt-get install -y wget unzip && \
+#     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+#     apt install -y ./google-chrome-stable_current_amd64.deb && \
+#     rm google-chrome-stable_current_amd64.deb && \
+#     apt-get clean
+
+# # Copiando repositório
+# RUN git clone https://github.com/Nilton94/Web_Scraping_Arg/tree/main/app .
+
+# Copiando do próprio diretório onde está o código
+COPY . .
 
 # Instalando dependencias do python
 RUN pip install -r requirements.txt

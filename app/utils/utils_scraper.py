@@ -10,9 +10,20 @@ import aiohttp
 from dataclasses import dataclass
 import datetime
 import pytz
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+
+# TESTANDO FIREFOX
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.firefox import GeckoDriverManager
+
+# # # TESTANDO CHROME
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.chrome.service import Service
+# from webdriver_manager.chrome import ChromeDriverManager
+
 from utils.log_config import get_logger
 from utils.lat_long import apply_geocoding, get_state, get_distance_unr, get_distance_provincial, get_distance_baigorria, get_distance_ninos, get_distance_carrasco
 from geopy.distance import distance
@@ -647,9 +658,24 @@ class ScraperZonaProp:
         # Browser
         logger.info(f'{self.__class__.__name__} - Criando o browser e coletando o HTML')
 
+        # TESTANDO FIREFOX
         options = Options()
         options.add_argument("--headless")
+        # options.add_argument("--disable-extensions")
+        options.add_argument("--no-sandbox")
+        # browser = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = options)
         browser = webdriver.Firefox(options = options)
+
+        # TESTANDO CHROME
+        # options = Options()
+        # options.add_argument("--headless")
+        # options.add_argument("--disable-extensions")
+        # # options.add_argument("--no-sandbox")
+        # # options.add_argument("--disable-dev-shm-usage")
+        # browser = webdriver.Chrome(options = options)
+        # browser.execute_cdp_cmd('Network.setUserAgentOverride', {"userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.53 Safari/537.36'})
+        # browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
         browser.get(url)
         source_code = browser.find_element(By.XPATH, '//*').get_attribute("innerHTML")
         browser.quit()
