@@ -16,7 +16,7 @@ from selenium.webdriver.common.by import By
 
 # TESTANDO FIREFOX
 from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.firefox.service import Service
 from webdriver_manager.firefox import GeckoDriverManager
 
 # # # TESTANDO CHROME
@@ -663,10 +663,14 @@ class ScraperZonaProp:
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
 
-        if os.getcwd().__contains__('app'):
+        if os.getcwd().__contains__('nilto'):
             browser = webdriver.Firefox(options = options)
         else:
-            browser = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = options)
+            service = Service(GeckoDriverManager().install())
+            browser = webdriver.Firefox(
+                options = options,
+                service = service
+            )
 
         # TESTANDO CHROME
         # options = Options()
