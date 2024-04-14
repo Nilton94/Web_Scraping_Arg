@@ -18,6 +18,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 from webdriver_manager.firefox import GeckoDriverManager
+import subprocess
 
 # # # TESTANDO CHROME
 # from selenium.webdriver.chrome.options import Options
@@ -666,6 +667,7 @@ class ScraperZonaProp:
         if os.getcwd().__contains__('nilto'):
             browser = webdriver.Firefox(options = options)
         else:
+            subprocess.run(["bash", "setup.sh"])
             service = Service(GeckoDriverManager().install())
             browser = webdriver.Firefox(
                 options = options,
