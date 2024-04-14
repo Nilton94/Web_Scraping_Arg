@@ -661,10 +661,12 @@ class ScraperZonaProp:
         # TESTANDO FIREFOX
         options = Options()
         options.add_argument("--headless")
-        # options.add_argument("--disable-extensions")
         options.add_argument("--no-sandbox")
-        # browser = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = options)
-        browser = webdriver.Firefox(options = options)
+
+        if os.getcwd().__contains__('app'):
+            browser = webdriver.Firefox(options = options)
+        else:
+            browser = webdriver.Firefox(executable_path = GeckoDriverManager().install(), options = options)
 
         # TESTANDO CHROME
         # options = Options()

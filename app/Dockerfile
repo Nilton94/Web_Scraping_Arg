@@ -4,6 +4,9 @@ FROM python:3.9
 # Definindo a pasta de trabalho do app
 WORKDIR /app
 
+# Adicionando metadata do autor
+LABEL org.opencontainers.image.authors="josenilton1878@gmail.com"
+
 # Instalando as dependências do SO
 RUN apt-get update && apt-get install -y \
     build-essential \
