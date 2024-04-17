@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
 # Instalando GeckoDriver
 RUN apt-get update && apt-get install -y \
     wget \
-    && wget -O /tmp/geckodriver.tar.gz https://github.com/mozilla/geckodriver/releases/download/v0.30.0/geckodriver-v0.30.0-linux64.tar.gz \
+    && wget -O /tmp/geckodriver.tar.gz https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux64.tar.gz \
     && tar -C /usr/local/bin -xzf /tmp/geckodriver.tar.gz \
     && rm /tmp/geckodriver.tar.gz
 
