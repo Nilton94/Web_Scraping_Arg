@@ -25,6 +25,10 @@ Visando facilitar a procura por imóveis de aluguel, criei uma aplicação em Py
 
 O app possui diversos filtros para facilitar a escolha dos imóveis com as características mais importantes. Além disso, todo o código foi colocado em uma imagem do Docker para facilitar tanto o deploy no Render quanto uso em outras máquinas.
 
+> ## Demonstração
+
+![Web Scraping Demo](/app/assets/projeto_web_scraping_arg.gif)
+
 > ## Estrutura
 - ### Data
     - Diretório com os dados tanto geográficos quanto das páginas web retornadas pelo web scraping
